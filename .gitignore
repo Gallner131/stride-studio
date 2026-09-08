@@ -1,3 +1,15 @@
 node_modules/
 dist/
 .DS_Store
+
+# CI builds the bundle; the repo must not carry it (§11.4).
+/index.html
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Golden diffs are a CI artifact, never committed (§12.2).
+/test/golden/diffs/

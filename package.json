@@ -1,17 +1,42 @@
 {
-  "name": "stride",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "stride-studio",
+  "version": "2.0.0-phase0",
+  "private": true,
+  "description": "Stride Studio — turn a run or workout into a post you're proud of",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node build.mjs --dev",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "lint:looks": "node scripts/lint-looks.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test --project=e2e-mobile --project=e2e-desktop",
+    "test:golden": "playwright test --project=golden",
+    "golden:update": "node scripts/golden-update.mjs",
+    "fixtures:media": "node scripts/make-fixture-photo.mjs",
+    "size": "node scripts/size.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run size"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "esbuild": "^0.28.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.11.0",
+    "@biomejs/biome": "2.5.12",
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.19.1",
+    "@types/pngjs": "6.0.5",
+    "pixelmatch": "7.1.0",
+    "pngjs": "7.0.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
