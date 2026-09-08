@@ -1,0 +1,4 @@
+{
+  "//": "Scopes ESM to test code only. The root package.json deliberately has no \"type\": \"module\": setting it there makes esbuild emit __toESM(mod, 1) for the React imports, changing the shipped bundle's CommonJS interop semantics. Phase 0 must not alter the app (see the alwaysStrict note in tsconfig.json). Test files need ESM for import.meta.dirname, so they declare it here instead.",
+  "type": "module"
+}
