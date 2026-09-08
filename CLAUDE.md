@@ -117,6 +117,29 @@ screen. Fix by using black label text (~6.4:1) or bold ≥18.66 px text, ideally
 the hand-rolled button with the official "Compatible with Strava" mark (§7.2). Owned by
 Phase 4's accessibility pass. Delete the entry when it is fixed.
 
+## The build must stay byte-identical (and two ways it leaked)
+
+`npm run build` reproduces `dbbce71`'s `index.html` byte-for-byte. Check it after any
+tooling change:
+
+```sh
+git show dbbce71:index.html > /tmp/orig.html && npm run build && cmp /tmp/orig.html dist/index.html
+```
+
+Two tooling changes silently altered the shipped app during Phase 0. Both are now pinned
+shut, with the reasoning at the site of the fix:
+
+1. **`tsconfig.json` `strict: true` implies `alwaysStrict: true`**, and esbuild honours it
+   when bundling `src/` — prepending `"use strict"` and flipping the app from sloppy to
+   strict mode (`this` binding, implicit globals). Hence `"alwaysStrict": false` in
+   `tsconfig.json`. **Turn it on in Phase 1** as its own verified change.
+2. **`"type": "module"` in the root `package.json`** makes esbuild emit
+   `__toESM(require("react"), 1)` — a CommonJS interop change. Hence the declaration lives in
+   `test/package.json` instead. Do not move it back to the root.
+
+The lesson generalises: config that looks like it only affects tooling can reach the bundle.
+When a phase claims to change no app behaviour, prove it with `cmp`.
+
 ## Linter scope
 
 Biome skips `src/App.jsx`, `src/render.js`, `src/main.jsx` and `src/styles.css`
