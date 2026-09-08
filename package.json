@@ -3,7 +3,6 @@
   "version": "2.0.0-phase0",
   "private": true,
   "description": "Stride Studio — turn a run or workout into a post you're proud of",
-  "type": "module",
   "scripts": {
     "dev": "node build.mjs --dev",
     "build": "node build.mjs",

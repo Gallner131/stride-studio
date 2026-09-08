@@ -14,6 +14,18 @@
     "checkJs": false,
 
     "strict": true,
+
+    // `strict: true` implies `alwaysStrict: true`, and esbuild honours that when it bundles
+    // src/ — which prepends "use strict" to dist/index.html and silently flips the shipped
+    // app from sloppy to strict mode. That changes real semantics (`this` binding in plain
+    // functions, implicit globals becoming throws) on paths the suite does not cover yet,
+    // such as video export and the Strava flow.
+    //
+    // Phase 0's job is to build the fence without touching the app: with this off, the
+    // production bundle is byte-identical to dbbce71. Turn it on in Phase 1 as a deliberate,
+    // separately verified change — by then the goldens exist to catch the fallout.
+    "alwaysStrict": false,
+
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
