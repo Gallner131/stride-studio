@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stride Studio — golden render harness</title>
+    <style>
+      body { margin: 0; background: #141414; color: #f2f2f2; font: 14px system-ui, sans-serif; }
+      #log { padding: 12px; }
+      canvas { display: block; margin: 8px 0; max-width: 300px; }
+    </style>
+  </head>
+  <body>
+    <div id="log">Loading harness…</div>
+    <script type="module">
+      // Golden render harness (spec §12.2). Loads the LEGACY switch-case renderer and
+      // exposes a single deterministic entry point for Playwright. No React, no app UI —
+      // this measures src/render.js and nothing else, so a golden failure always points at
+      // the render engine rather than at the editor around it.
+      import {
+        DEFAULT_OPTS,
+        FORMATS,
+        renderFrame,
+        setFormat,
+        TEMPLATES,
+      } from "../../src/render.js";
+      import { FIXED_DATE, FIXTURE_ACTIVITIES } from "../fixtures/activities.js";
+
+      /**
+       * Composition cells keep the spec's 540 px (§12.2) so a one-pixel text shift still
+       * clears the 0.5 % diff threshold. Photo-compositing cells are rendered at 270 px:
+       * the regressions they catch (filter, vignette, grain, cover-fit) move most of the
+       * frame, so they are detected at any resolution, and photo PNGs are ~7x the size of
+       * sticker PNGs.
+       */
+      const WIDTHS = { sticker: 540, photo: 270 };
+
+      /**
+       * Phase 0 stand-ins for Looks (§4.5). The legacy renderer has no token system — a
+       * "look" is a handful of keys inside the flat `opts` bag (§1.1 A5). These two presets
+       * pick the axes that actually change legacy pixels the most, so the matrix covers
+       * both the quiet default and a loud, uppercase, condensed, grainy variant.
+       * Phase 3 replaces both with the real Clean and Volt looks.
+       */
+      const LOOKS = {
+        clean: {},
+        volt: {
+          accent: "#D8FF3A",
+          fontHero: "cond",
+          uppercase: true,
+          grain: 0.08,
+          vignette: 0.35,
+        },
+      };
+
+      function loadImage(src) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error(`failed to load ${src}`));
+          img.src = src;
+        });
+      }
+
+      const photo = await loadImage("/test/fixtures/media/fixture-photo.png");
+      const media = { el: photo, type: "image" };
+
+      /**
+       * The matrix is split in two tiers, for repo-size reasons worth recording.
+       *
+       * Rendering all 324 composition cells over the fixture photo produced 165 MB of PNGs
+       * (~500 KB each — photo grain and gradient dithering are incompressible) and every
+       * re-record would add another 165 MB to git history. A safety net that expensive is one
+       * somebody eventually deletes.
+       *
+       * The split costs nothing in coverage, because the two things being protected are
+       * independent:
+       *
+       *   - "sticker": renderFrame's own sticker mode (§9.2) — no background, no vignette, no
+       *     grain, transparent canvas, every design element drawn at its normal position. This
+       *     is what protects each template's COMPOSITION: text positions, sizes, wrapping,
+       *     chart geometry, route projection, tile layout. It is also a real shipped export
+       *     path, so goldening it is not an artificial test-only configuration. 324 cells.
+       *
+       *   - "photo": the shared COMPOSITING path (drawCover, ctx.filter, vignette, grain,
+       *     frosted) is one piece of code, not 27. It needs goldening once per format and per
+       *     photo-dependent template, not once per cell. 24 anchor cells.
+       *
+       * Known gap, accepted: `wash()` (poster, pacewave) and the solid-background fills of
+       * frame/polaroid/receipt/retro/headline sit behind `if (!sticker)`, so they are covered
+       * only by the photo tier. poster, receipt and headline are anchors for that reason;
+       * pacewave and retro are added to the anchor list to close the rest.
+       */
+      const TIERS = ["sticker", "photo"];
+
+      /** §12.2 Matrix B's anchor list, mapped to legacy ids, plus the wash/solid-bg templates. */
+      const PHOTO_ANCHORS = [
+        "sticker",
+        "poster",
+        "grid",
+        "headline",
+        "receipt",
+        "noir",
+        "hrwave",
+        "rings",
+        "pacewave",
+        "retro",
+      ];
+
+      /**
+       * Renders one matrix cell and returns a base64 PNG.
+       * Deterministic by construction: fixed activity date, t = 1 (animation final state,
+       * which is what image export uses per §9.1), seeded grain, pinned locale/timezone
+       * from playwright.config.ts.
+       */
+      function renderCell({ template, format, look, activity, tier }) {
+        const f = setFormat(format);
+        const scale = WIDTHS[tier] / f.w;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(f.w * scale);
+        canvas.height = Math.round(f.h * scale);
+        const ctx = canvas.getContext("2d", { alpha: true });
+        ctx.scale(scale, scale);
+
+        const opts = { ...structuredClone(DEFAULT_OPTS), ...LOOKS[look] };
+        const act = FIXTURE_ACTIVITIES[activity];
+        const mode = tier === "sticker" ? "sticker" : "full";
+        renderFrame(ctx, tier === "photo" ? media : null, act, template, opts, 1, 1, mode);
+
+        return canvas.toDataURL("image/png").split(",")[1];
+      }
+
+      function cell(template, format, look, activity, tier) {
+        return {
+          name: `${template}__${format}__${look}__${activity}__${tier}`,
+          template,
+          format,
+          look,
+          activity,
+          tier,
+        };
+      }
+
+      function buildMatrix() {
+        const cells = [];
+        // Composition tier: every template x format x look x activity, sticker mode.
+        for (const t of TEMPLATES) {
+          for (const format of Object.keys(FORMATS)) {
+            for (const look of Object.keys(LOOKS)) {
+              for (const activity of Object.keys(FIXTURE_ACTIVITIES)) {
+                cells.push(cell(t.id, format, look, activity, "sticker"));
+              }
+            }
+          }
+        }
+        // Compositing tier: anchor templates over the fixture photo.
+        for (const template of PHOTO_ANCHORS) {
+          for (const format of Object.keys(FORMATS)) {
+            cells.push(cell(template, format, "clean", "run", "photo"));
+          }
+        }
+        return cells;
+      }
+
+      window.__golden = {
+        WIDTHS,
+        FIXED_DATE,
+        templates: TEMPLATES.map((t) => t.id),
+        formats: Object.keys(FORMATS),
+        looks: Object.keys(LOOKS),
+        activities: Object.keys(FIXTURE_ACTIVITIES),
+        tiers: TIERS,
+        photoAnchors: PHOTO_ANCHORS,
+        matrix: buildMatrix(),
+        renderCell,
+      };
+
+      const composition = window.__golden.matrix.filter((c) => c.tier === "sticker").length;
+      const withPhoto = window.__golden.matrix.length - composition;
+      document.getElementById("log").textContent =
+        `harness ready — ${window.__golden.matrix.length} cells ` +
+        `(${composition} composition @ ${WIDTHS.sticker}px + ${withPhoto} photo compositing @ ${WIDTHS.photo}px)`;
+      document.body.dataset.ready = "1";
+    </script>
+  </body>
+</html>
