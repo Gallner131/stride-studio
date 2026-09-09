@@ -1,6 +1,7 @@
 import { newId } from "./ids";
 import type {
   Anim,
+  ChartLayer,
   Document,
   FormatId,
   HyroxBreakdownLayer,
@@ -10,8 +11,11 @@ import type {
   ImageLayer,
   Layer,
   LayerType,
+  RouteLayer,
   ShapeKind,
   ShapeLayer,
+  StatLayer,
+  StatRowLayer,
   StickerLayer,
   TextLayer,
 } from "./types";
@@ -137,6 +141,130 @@ export function newStickerLayer(svgId: string, over: Partial<StickerLayer> = {})
   } as StickerLayer;
 }
 
+export function newStatLayer(field = "distance", over: Partial<StatLayer> = {}): StatLayer {
+  return {
+    ...base("Stat"),
+    type: "stat",
+    field,
+    layout: "stacked",
+    showLabel: true,
+    countUp: true,
+    style: {
+      valueFont: "cond",
+      valueSize: 200,
+      valueWeight: 800,
+      valueColor: "#FFFFFF",
+      labelFont: "sans",
+      labelSize: 34,
+      labelColor: "rgba(255,255,255,0.7)",
+      unitSize: 0.38,
+      letterSpacing: -0.03,
+      shadow: true,
+    },
+    anim: { preset: "countUp", delay: 0.1, duration: 1.8, ease: "outExpo" },
+    ...over,
+  } as StatLayer;
+}
+
+export function newStatRowLayer(
+  fields: string[] = ["time", "pace", "elevation"],
+  over: Partial<StatRowLayer> = {},
+): StatRowLayer {
+  return {
+    ...base("Stat row"),
+    type: "statRow",
+    fields,
+    layout: "row",
+    gap: 44,
+    divider: "dot",
+    showLabels: true,
+    countUp: false,
+    style: {
+      valueFont: "sans",
+      valueSize: 44,
+      labelSize: 22,
+      color: "#FFFFFF",
+      labelColor: "rgba(255,255,255,0.7)",
+      shadow: true,
+      panel: null,
+    },
+    ...over,
+  } as StatRowLayer;
+}
+
+export function newRouteLayer(over: Partial<RouteLayer> = {}): RouteLayer {
+  return {
+    ...base("Route"),
+    type: "route",
+    w: 620,
+    h: 620,
+    style: {
+      mode: "solid",
+      stroke: "#FFFFFF",
+      width: 10,
+      colorBy: "none",
+      gradient: ["#D8FF3A", "rgba(255,255,255,0.45)"],
+      zoneColors: ["#8FA3B5", "#4FC1E9", "#7BE495", "#FFB347", "#FF5A5F"],
+      markers: { km: false, labels: false, arrows: false },
+      endpoints: "dots",
+      startColor: "#FFFFFF",
+      endColor: "#D8FF3A",
+      dotSize: 18,
+      silhouette: false,
+      simplify: 2,
+      runnerDot: false,
+    },
+    constraints: { keepAspect: true, minW: 120, safeZone: true },
+    anim: { preset: "fadeIn", delay: 0.2, duration: 2.5, ease: "outCubic" },
+    ...over,
+  } as RouteLayer;
+}
+
+export function newChartLayer(kind: ChartLayer["kind"] = "hr", over: Partial<ChartLayer> = {}): ChartLayer {
+  const isRings = kind === "rings";
+  return {
+    ...base(
+      kind === "hr"
+        ? "Heart rate"
+        : kind === "pace"
+          ? "Pace"
+          : kind === "elevation"
+            ? "Elevation"
+            : kind === "splits"
+              ? "Splits"
+              : kind === "zones"
+                ? "Zones"
+                : "Rings",
+    ),
+    type: "chart",
+    kind,
+    w: isRings ? 420 : 880,
+    h: isRings ? 420 : 280,
+    options: {
+      zoneColours: true,
+      bands: true,
+      labels: true,
+      smooth: 5,
+      mode: "wave",
+      highlightFastest: true,
+      fill: true,
+      showValues: true,
+      showPercent: true,
+      metrics: ["effort", "hr", "duration"],
+    },
+    style: {
+      color: "#D8FF3A",
+      muted: "rgba(255,255,255,0.45)",
+      text: "#FFFFFF",
+      font: "sans",
+      zoneColors: ["#8FA3B5", "#4FC1E9", "#7BE495", "#FFB347", "#FF5A5F"],
+    },
+    constraints: { minW: 160, safeZone: true, keepAspect: isRings },
+    anim: { preset: "fadeIn", delay: 0.3, duration: 2.0, ease: "outCubic" },
+    ...over,
+  } as ChartLayer;
+}
+
 export const HYROX_STYLE: HyroxLayerStyle = {
   run: "#5AC8FA",
   station: "#D8FF3A",
@@ -192,6 +320,10 @@ export const LAYER_LABEL: Record<LayerType, string> = {
   shape: "Shape",
   image: "Photo / logo",
   sticker: "Sticker",
+  stat: "Stat",
+  statRow: "Stat row",
+  route: "Route",
+  chart: "Chart",
   hyroxBreakdown: "Time breakdown",
   hyroxStations: "Stations",
   hyroxSplits: "Splits",

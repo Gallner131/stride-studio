@@ -127,6 +127,86 @@ export interface StickerLayer extends LayerBase {
   style: { fill: string; stroke: string | null; strokeWidth: number };
 }
 
+// --- data-bound layers (§4.4.3 - §4.4.6) ------------------------------------
+
+export interface StatLayer extends LayerBase {
+  type: "stat";
+  /** Field id from STAT_FIELDS. */
+  field: string;
+  layout: "stacked" | "inline" | "labelAbove";
+  showLabel: boolean;
+  countUp: boolean;
+  style: {
+    valueFont: string;
+    valueSize: number;
+    valueWeight: number;
+    valueColor: string;
+    labelFont: string;
+    labelSize: number;
+    labelColor: string;
+    unitSize: number;
+    letterSpacing: number;
+    shadow: boolean;
+  };
+}
+
+export interface StatRowLayer extends LayerBase {
+  type: "statRow";
+  fields: string[];
+  layout: "row" | "column" | "grid2";
+  gap: number;
+  divider: "none" | "dot" | "line";
+  showLabels: boolean;
+  countUp: boolean;
+  style: {
+    valueFont: string;
+    valueSize: number;
+    labelSize: number;
+    color: string;
+    labelColor: string;
+    shadow: boolean;
+    panel: { kind: "glass" | "solid"; color: string; pad: number; radius: number } | null;
+  };
+}
+
+export interface RouteLayer extends LayerBase {
+  type: "route";
+  style: {
+    mode: "solid" | "dotted" | "dashed" | "glow" | "tube" | "sketch" | "extrude";
+    stroke: string;
+    width: number;
+    colorBy: "none" | "pace" | "hr" | "elevation";
+    gradient: [string, string];
+    zoneColors: string[];
+    markers: { km: boolean; labels: boolean; arrows: boolean };
+    endpoints: "dots" | "pins" | "flags" | "none";
+    startColor: string;
+    endColor: string;
+    dotSize: number;
+    silhouette: boolean;
+    simplify: number;
+    runnerDot: boolean;
+  };
+}
+
+export interface ChartLayer extends LayerBase {
+  type: "chart";
+  kind: "hr" | "pace" | "elevation" | "splits" | "zones" | "rings";
+  options: {
+    zoneColours: boolean;
+    bands: boolean;
+    labels: boolean;
+    smooth: number;
+    mode: "wave" | "bars";
+    highlightFastest: boolean;
+    fill: boolean;
+    showValues: boolean;
+    showPercent: boolean;
+    metrics: ("effort" | "hr" | "duration")[];
+  };
+  style: { color: string; muted: string; text: string; font: string; zoneColors: string[] };
+}
+
 /** Colour tokens shared by the HYROX visuals. */
 export interface HyroxLayerStyle {
   run: string;
@@ -162,6 +242,10 @@ export type Layer =
   | ShapeLayer
   | ImageLayer
   | StickerLayer
+  | StatLayer
+  | StatRowLayer
+  | RouteLayer
+  | ChartLayer
   | HyroxBreakdownLayer
   | HyroxStationsLayer
   | HyroxSplitsLayer;

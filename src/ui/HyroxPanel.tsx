@@ -338,11 +338,12 @@ export function HyroxPanel({ hyrox, onApply, onToast }: HyroxPanelProps) {
   );
 }
 
+/** Label plus control. A fieldset rather than a <label>, for the same reason as atoms.tsx. */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="field">
+    <fieldset className="field" aria-label={label}>
       <span className="muted small">{label}</span>
       {children}
-    </label>
+    </fieldset>
   );
 }

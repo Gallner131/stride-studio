@@ -4,18 +4,26 @@ import type { FieldTable } from "../model/bindings";
 import { resolveBindings } from "../model/bindings";
 import type { HyroxResult } from "../model/hyrox";
 import type {
+  ChartLayer,
   HyroxBreakdownLayer,
   HyroxSplitsLayer,
   HyroxStationsLayer,
   ImageLayer,
   Layer,
+  RouteLayer,
   ShapeLayer,
+  StatLayer,
+  StatRowLayer,
   StickerLayer,
   TextLayer,
 } from "../model/types";
 import type { AnimState } from "./anim";
 import { typewriter } from "./anim";
+import { type ChartData, chartHasData, drawChart } from "./chartLayers";
+import { drawStat, drawStatRow, measureStat, measureStatRow, presentStats, resolveStat } from "./dataLayers";
+import type { LatLng } from "./geometry";
 import { DEFAULT_HYROX_STYLE, drawHyroxBreakdown, drawHyroxSplits, drawHyroxStations } from "./hyroxLayers";
+import { drawRoute } from "./routeLayer";
 import { stickerPath } from "./stickers";
 import { applyLetterSpacing, clearLetterSpacing, cssFont, measureRun, wrapText } from "./text";
 
@@ -27,6 +35,22 @@ export interface RenderEnv {
   anim: AnimState;
   /** The current HYROX result, when the activity is a HYROX race. */
   hyrox?: HyroxResult | null;
+  /**
+   * Raw activity series for the data-bound layers. Separate from `fields`, which holds
+   * formatted strings: a chart needs the numbers, a text layer needs the text.
+   */
+  series?: {
+    route?: LatLng[];
+    hr?: number[];
+    hrMax?: number;
+    splits?: number[];
+    altitude?: number[];
+    distanceKm?: number;
+    durationSeconds?: number;
+    avgHr?: number;
+    effort?: number;
+    calories?: number;
+  };
 }
 
 export interface Box {
@@ -320,12 +344,136 @@ const stickerRenderer: LayerRenderer<StickerLayer> = {
 
 const STROKE_ONLY = new Set(["wind", "check", "cross", "route"]);
 
-// ---------------------------------------------------------------- HYROX
+// ---------------------------------------------------------------- data-bound
 
 const fixed = (layer: Layer, fw: number, fh: number): Box => ({
   w: typeof layer.w === "number" ? layer.w : fw,
   h: typeof layer.h === "number" ? layer.h : fh,
 });
+
+const statRenderer: LayerRenderer<StatLayer> = {
+  measure(layer, env) {
+    const stat = resolveStat(layer.field, env.fields, 1);
+    return measureStat(env.ctx, stat, layer.style, {
+      layout: layer.layout,
+      showLabel: layer.showLabel,
+      countUpProgress: 1,
+    });
+  },
+  render(layer, env) {
+    const progress = layer.countUp ? env.anim.progress : 1;
+    const stat = resolveStat(layer.field, env.fields, progress);
+    drawStat(env.ctx, stat, layer.style, {
+      layout: layer.layout,
+      showLabel: layer.showLabel,
+      countUpProgress: progress,
+    });
+  },
+};
+
+const statRowRenderer: LayerRenderer<StatRowLayer> = {
+  measure(layer, env) {
+    const stats = presentStats(layer.fields, env.fields, 1);
+    return measureStatRow(env.ctx, stats, layer.style, {
+      layout: layer.layout,
+      gap: layer.gap,
+      divider: layer.divider,
+      showLabels: layer.showLabels,
+      countUpProgress: 1,
+    });
+  },
+  render(layer, env) {
+    const progress = layer.countUp ? env.anim.progress : 1;
+    const stats = presentStats(layer.fields, env.fields, progress);
+    const options = {
+      layout: layer.layout,
+      gap: layer.gap,
+      divider: layer.divider,
+      showLabels: layer.showLabels,
+      countUpProgress: progress,
+    };
+    const measured = measureStatRow(env.ctx, stats, layer.style, options);
+    drawStatRow(env.ctx, stats, layer.style, options, measured);
+  },
+};
+
+/** Drawn when a data layer has nothing to show, so it explains itself in the editor. */
+function drawNoData(ctx: CanvasRenderingContext2D, w: number, h: number, reason: string): void {
+  ctx.save();
+  ctx.setLineDash([9, 7]);
+  ctx.strokeStyle = "rgba(255,255,255,0.32)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, w, h);
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,255,255,0.62)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `600 ${Math.max(14, Math.min(26, h * 0.13))}px system-ui, sans-serif`;
+  ctx.fillText(reason, w / 2, h / 2);
+  ctx.restore();
+}
+
+const routeRenderer: LayerRenderer<RouteLayer> = {
+  measure: (layer) => fixed(layer, 620, 620),
+  render(layer, env) {
+    const { w, h } = fixed(layer, 620, 620);
+    const route = env.series?.route ?? [];
+    if (route.length < 2) {
+      drawNoData(env.ctx, w, h, "No GPS in this activity");
+      return;
+    }
+    drawRoute(
+      env.ctx,
+      {
+        points: route,
+        hr: env.series?.hr,
+        splits: env.series?.splits,
+        altitude: env.series?.altitude,
+        distanceKm: env.series?.distanceKm,
+      },
+      w,
+      h,
+      layer.style,
+      { progress: env.anim.progress },
+    );
+  },
+};
+
+const CHART_REASON: Record<ChartLayer["kind"], string> = {
+  hr: "No heart rate in this activity",
+  zones: "No heart rate in this activity",
+  pace: "No split data in this activity",
+  splits: "No split data in this activity",
+  elevation: "No elevation in this activity",
+  rings: "No effort data in this activity",
+};
+
+const chartRenderer: LayerRenderer<ChartLayer> = {
+  measure: (layer) => fixed(layer, 880, 280),
+  render(layer, env) {
+    const { w, h } = fixed(layer, 880, 280);
+    const data: ChartData = {
+      hr: env.series?.hr,
+      hrMax: env.series?.hrMax,
+      splits: env.series?.splits,
+      altitude: env.series?.altitude,
+      effort: env.series?.effort,
+      avgHr: env.series?.avgHr,
+      durationSeconds: env.series?.durationSeconds,
+      calories: env.series?.calories,
+    };
+    if (!chartHasData(layer.kind, data)) {
+      drawNoData(env.ctx, w, h, CHART_REASON[layer.kind]);
+      return;
+    }
+    drawChart(env.ctx, layer.kind, data, w, h, layer.style, {
+      ...layer.options,
+      progress: env.anim.progress,
+    });
+  },
+};
+
+// ---------------------------------------------------------------- HYROX
 
 const hyroxStyleOf = (style: {
   run: string;
@@ -396,6 +544,10 @@ const hyroxSplitsRenderer: LayerRenderer<HyroxSplitsLayer> = {
 
 export const RENDERERS = {
   text: textRenderer,
+  stat: statRenderer,
+  statRow: statRowRenderer,
+  route: routeRenderer,
+  chart: chartRenderer,
   shape: shapeRenderer,
   image: imageRenderer,
   sticker: stickerRenderer,
@@ -414,6 +566,14 @@ export function measureLayer(layer: Layer, env: RenderEnv): Box {
       return RENDERERS.image.measure(layer, env);
     case "sticker":
       return RENDERERS.sticker.measure(layer, env);
+    case "stat":
+      return RENDERERS.stat.measure(layer, env);
+    case "statRow":
+      return RENDERERS.statRow.measure(layer, env);
+    case "route":
+      return RENDERERS.route.measure(layer, env);
+    case "chart":
+      return RENDERERS.chart.measure(layer, env);
     case "hyroxBreakdown":
       return RENDERERS.hyroxBreakdown.measure(layer, env);
     case "hyroxStations":
@@ -436,6 +596,18 @@ export function renderLayer(layer: Layer, env: RenderEnv): void {
       return;
     case "sticker":
       RENDERERS.sticker.render(layer, env);
+      return;
+    case "stat":
+      RENDERERS.stat.render(layer, env);
+      return;
+    case "statRow":
+      RENDERERS.statRow.render(layer, env);
+      return;
+    case "route":
+      RENDERERS.route.render(layer, env);
+      return;
+    case "chart":
+      RENDERERS.chart.render(layer, env);
       return;
     case "hyroxBreakdown":
       RENDERERS.hyroxBreakdown.render(layer, env);

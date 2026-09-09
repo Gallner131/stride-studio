@@ -1,8 +1,20 @@
 import { firstSelected, useEditor } from "../editor/store";
+import { STAT_FIELDS } from "../engine/dataLayers";
 import { STICKERS } from "../engine/stickers";
 import { FONT_STACKS } from "../engine/text";
 import { BINDING_CHIPS } from "../model/bindings";
-import type { AnimPreset, ImageLayer, Layer, ShapeLayer, StickerLayer, TextLayer } from "../model/types";
+import type {
+  AnimPreset,
+  ChartLayer,
+  ImageLayer,
+  Layer,
+  RouteLayer,
+  ShapeLayer,
+  StatLayer,
+  StatRowLayer,
+  StickerLayer,
+  TextLayer,
+} from "../model/types";
 import { ColorPicker, NumberSlider, Row, Section, Seg } from "./atoms";
 
 const FONT_LABELS: [string, string][] = [
@@ -57,6 +69,10 @@ export function Inspector({ onDone }: { onDone: () => void }) {
       {layer.type === "shape" && <ShapeControls layer={layer} patch={patch} />}
       {layer.type === "image" && <ImageControls layer={layer} patch={patch} />}
       {layer.type === "sticker" && <StickerControls layer={layer} patch={patch} />}
+      {layer.type === "stat" && <StatControls layer={layer} patch={patch} />}
+      {layer.type === "statRow" && <StatRowControls layer={layer} patch={patch} />}
+      {layer.type === "route" && <RouteControls layer={layer} patch={patch} />}
+      {layer.type === "chart" && <ChartControls layer={layer} patch={patch} />}
 
       <Section title="Animation">
         <Row label="Preset">
@@ -636,5 +652,616 @@ function StickerControls({ layer, patch }: { layer: StickerLayer; patch: (fn: (l
         ))}
       </div>
     </Section>
+  );
+}
+
+function StatControls({ layer, patch }: { layer: StatLayer; patch: (fn: (l: Layer) => void) => void }) {
+  const set = (fn: (s: StatLayer) => void) => patch((l) => fn(l as StatLayer));
+  return (
+    <>
+      <Section title="Data" open>
+        <Row label="Field">
+          <select
+            value={layer.field}
+            onChange={(e) =>
+              set((s) => {
+                s.field = e.target.value;
+              })
+            }
+            data-testid="stat-field"
+          >
+            {STAT_FIELDS.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </Row>
+        <Row label="Label">
+          <Seg
+            value={layer.showLabel ? "on" : "off"}
+            options={[
+              ["on", "Shown"],
+              ["off", "Hidden"],
+            ]}
+            onChange={(v) =>
+              set((s) => {
+                s.showLabel = v === "on";
+              })
+            }
+          />
+        </Row>
+        <Row label="Layout">
+          <Seg
+            value={layer.layout}
+            options={[
+              ["stacked", "Stacked"],
+              ["inline", "Inline"],
+              ["labelAbove", "Label on top"],
+            ]}
+            onChange={(v) =>
+              set((s) => {
+                s.layout = v;
+              })
+            }
+          />
+        </Row>
+        <Row label="Count up">
+          <Seg
+            value={layer.countUp ? "on" : "off"}
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            onChange={(v) =>
+              set((s) => {
+                s.countUp = v === "on";
+              })
+            }
+          />
+        </Row>
+      </Section>
+      <Section title="Type">
+        <Row label="Size">
+          <NumberSlider
+            value={layer.style.valueSize}
+            min={24}
+            max={420}
+            onChange={(v) =>
+              set((s) => {
+                s.style.valueSize = v;
+              })
+            }
+          />
+        </Row>
+        <Row label="Font">
+          <span className="chips tight">
+            {FONT_LABELS.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={`chip ${layer.style.valueFont === id ? "on" : ""}`}
+                style={{ fontFamily: FONT_STACKS[id] }}
+                onClick={() =>
+                  set((s) => {
+                    s.style.valueFont = id;
+                  })
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+        </Row>
+        <Row label="Label size">
+          <NumberSlider
+            value={layer.style.labelSize}
+            min={12}
+            max={90}
+            onChange={(v) =>
+              set((s) => {
+                s.style.labelSize = v;
+              })
+            }
+          />
+        </Row>
+      </Section>
+      <Section title="Colour">
+        <Row label="Value">
+          <ColorPicker
+            value={layer.style.valueColor}
+            onChange={(c) =>
+              set((s) => {
+                s.style.valueColor = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+        <Row label="Label">
+          <ColorPicker
+            value={layer.style.labelColor}
+            onChange={(c) =>
+              set((s) => {
+                s.style.labelColor = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+      </Section>
+    </>
+  );
+}
+
+function StatRowControls({ layer, patch }: { layer: StatRowLayer; patch: (fn: (l: Layer) => void) => void }) {
+  const set = (fn: (s: StatRowLayer) => void) => patch((l) => fn(l as StatRowLayer));
+  return (
+    <>
+      <Section title="Data" open>
+        <p className="muted small" style={{ margin: 0 }}>
+          Tap to add or remove. Fields your activity does not have are dropped automatically.
+        </p>
+        <div className="chips tight">
+          {STAT_FIELDS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              className={`chip ${layer.fields.includes(f.id) ? "on" : ""}`}
+              data-testid={`row-field-${f.id}`}
+              onClick={() =>
+                set((s) => {
+                  s.fields = s.fields.includes(f.id)
+                    ? s.fields.filter((x) => x !== f.id)
+                    : [...s.fields, f.id];
+                })
+              }
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <Row label="Labels">
+          <Seg
+            value={layer.showLabels ? "on" : "off"}
+            options={[
+              ["on", "Shown"],
+              ["off", "Hidden"],
+            ]}
+            onChange={(v) =>
+              set((s) => {
+                s.showLabels = v === "on";
+              })
+            }
+          />
+        </Row>
+      </Section>
+      <Section title="Layout">
+        <Row label="Direction">
+          <Seg
+            value={layer.layout}
+            options={[
+              ["row", "Row"],
+              ["column", "Column"],
+              ["grid2", "Grid"],
+            ]}
+            onChange={(v) =>
+              set((s) => {
+                s.layout = v;
+              })
+            }
+          />
+        </Row>
+        <Row label="Gap">
+          <NumberSlider
+            value={layer.gap}
+            min={8}
+            max={160}
+            onChange={(v) =>
+              set((s) => {
+                s.gap = v;
+              })
+            }
+          />
+        </Row>
+        <Row label="Divider">
+          <Seg
+            value={layer.divider}
+            options={[
+              ["none", "None"],
+              ["dot", "Dot"],
+              ["line", "Line"],
+            ]}
+            onChange={(v) =>
+              set((s) => {
+                s.divider = v;
+              })
+            }
+          />
+        </Row>
+        <Row label="Panel">
+          <Seg
+            value={layer.style.panel ? layer.style.panel.kind : "none"}
+            options={[
+              ["none", "None"],
+              ["glass", "Glass"],
+              ["solid", "Solid"],
+            ]}
+            onChange={(v) =>
+              set((s) => {
+                s.style.panel =
+                  v === "none"
+                    ? null
+                    : {
+                        kind: v as "glass" | "solid",
+                        color: v === "glass" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.55)",
+                        pad: 26,
+                        radius: 22,
+                      };
+              })
+            }
+          />
+        </Row>
+        <Row label="Size">
+          <NumberSlider
+            value={layer.style.valueSize}
+            min={18}
+            max={140}
+            onChange={(v) =>
+              set((s) => {
+                s.style.valueSize = v;
+              })
+            }
+          />
+        </Row>
+      </Section>
+      <Section title="Colour">
+        <Row label="Value">
+          <ColorPicker
+            value={layer.style.color}
+            onChange={(c) =>
+              set((s) => {
+                s.style.color = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+      </Section>
+    </>
+  );
+}
+
+function RouteControls({ layer, patch }: { layer: RouteLayer; patch: (fn: (l: Layer) => void) => void }) {
+  const set = (fn: (r: RouteLayer) => void) => patch((l) => fn(l as RouteLayer));
+  const modes: RouteLayer["style"]["mode"][] = [
+    "solid",
+    "dotted",
+    "dashed",
+    "glow",
+    "tube",
+    "sketch",
+    "extrude",
+  ];
+  return (
+    <>
+      <Section title="Style" open>
+        <Row label="Line">
+          <span className="chips tight">
+            {modes.map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`chip ${layer.style.mode === m ? "on" : ""}`}
+                data-testid={`route-mode-${m}`}
+                onClick={() =>
+                  set((r) => {
+                    r.style.mode = m;
+                  })
+                }
+              >
+                {m}
+              </button>
+            ))}
+          </span>
+        </Row>
+        <Row label="Colour by">
+          <Seg
+            value={layer.style.colorBy}
+            options={[
+              ["none", "One colour"],
+              ["pace", "Pace"],
+              ["hr", "HR"],
+              ["elevation", "Grade"],
+            ]}
+            onChange={(v) =>
+              set((r) => {
+                r.style.colorBy = v;
+              })
+            }
+          />
+        </Row>
+        <Row label="Colour">
+          <ColorPicker
+            value={layer.style.stroke}
+            onChange={(c) =>
+              set((r) => {
+                r.style.stroke = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+        <Row label="Width">
+          <NumberSlider
+            value={layer.style.width}
+            min={2}
+            max={40}
+            onChange={(v) =>
+              set((r) => {
+                r.style.width = v;
+              })
+            }
+          />
+        </Row>
+        <Row label="Ends">
+          <Seg
+            value={layer.style.endpoints}
+            options={[
+              ["dots", "Dots"],
+              ["pins", "Pins"],
+              ["flags", "Flags"],
+              ["none", "None"],
+            ]}
+            onChange={(v) =>
+              set((r) => {
+                r.style.endpoints = v;
+              })
+            }
+          />
+        </Row>
+      </Section>
+      <Section title="Markers">
+        <Row label="Km dots">
+          <Seg
+            value={layer.style.markers.km ? "on" : "off"}
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            onChange={(v) =>
+              set((r) => {
+                r.style.markers.km = v === "on";
+              })
+            }
+          />
+        </Row>
+        <Row label="Km labels">
+          <Seg
+            value={layer.style.markers.labels ? "on" : "off"}
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            onChange={(v) =>
+              set((r) => {
+                r.style.markers.labels = v === "on";
+              })
+            }
+          />
+        </Row>
+        <Row label="Arrows">
+          <Seg
+            value={layer.style.markers.arrows ? "on" : "off"}
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            onChange={(v) =>
+              set((r) => {
+                r.style.markers.arrows = v === "on";
+              })
+            }
+          />
+        </Row>
+        <Row label="Runner dot">
+          <Seg
+            value={layer.style.runnerDot ? "on" : "off"}
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            onChange={(v) =>
+              set((r) => {
+                r.style.runnerDot = v === "on";
+              })
+            }
+          />
+        </Row>
+        <Row label="Fill loops">
+          <Seg
+            value={layer.style.silhouette ? "on" : "off"}
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            onChange={(v) =>
+              set((r) => {
+                r.style.silhouette = v === "on";
+              })
+            }
+          />
+        </Row>
+      </Section>
+      <Section title="Detail">
+        <Row label="Simplify">
+          <NumberSlider
+            value={layer.style.simplify}
+            min={0}
+            max={12}
+            step={0.5}
+            onChange={(v) =>
+              set((r) => {
+                r.style.simplify = v;
+              })
+            }
+          />
+        </Row>
+      </Section>
+    </>
+  );
+}
+
+function ChartControls({ layer, patch }: { layer: ChartLayer; patch: (fn: (l: Layer) => void) => void }) {
+  const set = (fn: (c: ChartLayer) => void) => patch((l) => fn(l as ChartLayer));
+  const kinds: ChartLayer["kind"][] = ["hr", "pace", "elevation", "splits", "zones", "rings"];
+  return (
+    <>
+      <Section title="Chart" open>
+        <Row label="Kind">
+          <span className="chips tight">
+            {kinds.map((k) => (
+              <button
+                key={k}
+                type="button"
+                className={`chip ${layer.kind === k ? "on" : ""}`}
+                data-testid={`chart-kind-${k}`}
+                onClick={() =>
+                  set((c) => {
+                    c.kind = k;
+                  })
+                }
+              >
+                {k}
+              </button>
+            ))}
+          </span>
+        </Row>
+        {layer.kind === "hr" && (
+          <>
+            <Row label="Zone colours">
+              <Seg
+                value={layer.options.zoneColours ? "on" : "off"}
+                options={[
+                  ["on", "On"],
+                  ["off", "Off"],
+                ]}
+                onChange={(v) =>
+                  set((c) => {
+                    c.options.zoneColours = v === "on";
+                  })
+                }
+              />
+            </Row>
+            <Row label="Zone bands">
+              <Seg
+                value={layer.options.bands ? "on" : "off"}
+                options={[
+                  ["on", "On"],
+                  ["off", "Off"],
+                ]}
+                onChange={(v) =>
+                  set((c) => {
+                    c.options.bands = v === "on";
+                  })
+                }
+              />
+            </Row>
+            <Row label="Smoothing">
+              <NumberSlider
+                value={layer.options.smooth}
+                min={1}
+                max={25}
+                onChange={(v) =>
+                  set((c) => {
+                    c.options.smooth = v;
+                  })
+                }
+              />
+            </Row>
+          </>
+        )}
+        {layer.kind === "pace" && (
+          <Row label="Shape">
+            <Seg
+              value={layer.options.mode}
+              options={[
+                ["wave", "Wave"],
+                ["bars", "Bars"],
+              ]}
+              onChange={(v) =>
+                set((c) => {
+                  c.options.mode = v;
+                })
+              }
+            />
+          </Row>
+        )}
+        {(layer.kind === "splits" || layer.kind === "pace") && (
+          <Row label="Values">
+            <Seg
+              value={layer.options.showValues ? "on" : "off"}
+              options={[
+                ["on", "Shown"],
+                ["off", "Hidden"],
+              ]}
+              onChange={(v) =>
+                set((c) => {
+                  c.options.showValues = v === "on";
+                })
+              }
+            />
+          </Row>
+        )}
+        {layer.kind === "zones" && (
+          <Row label="Show">
+            <Seg
+              value={layer.options.showPercent ? "on" : "off"}
+              options={[
+                ["on", "Minutes"],
+                ["off", "Hidden"],
+              ]}
+              onChange={(v) =>
+                set((c) => {
+                  c.options.showPercent = v === "on";
+                })
+              }
+            />
+          </Row>
+        )}
+        <Row label="Labels">
+          <Seg
+            value={layer.options.labels ? "on" : "off"}
+            options={[
+              ["on", "Shown"],
+              ["off", "Hidden"],
+            ]}
+            onChange={(v) =>
+              set((c) => {
+                c.options.labels = v === "on";
+              })
+            }
+          />
+        </Row>
+      </Section>
+      <Section title="Colour">
+        <Row label="Accent">
+          <ColorPicker
+            value={layer.style.color}
+            onChange={(c) =>
+              set((ch) => {
+                ch.style.color = c ?? "#D8FF3A";
+              })
+            }
+          />
+        </Row>
+        <Row label="Text">
+          <ColorPicker
+            value={layer.style.text}
+            onChange={(c) =>
+              set((ch) => {
+                ch.style.text = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+      </Section>
+    </>
   );
 }

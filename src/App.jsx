@@ -11,6 +11,7 @@ import { AddMenu } from "./ui/AddMenu.tsx";
 import { LayersPanel } from "./ui/LayersPanel.tsx";
 import { HyroxPanel } from "./ui/HyroxPanel.tsx";
 import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
+import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
   W, H, FORMATS, setFormat, ANIM_SECONDS, DEMO, DEMO_WORKOUT, SPORTS, sportFromStrava, CATEGORIES, TEMPLATES, PALETTE, FILTERS, FONTS, BACKGROUNDS, DEFAULT_OPTS,
@@ -151,11 +152,41 @@ export default function App() {
     const base = buildFields(effectiveAct, opts);
     return hyrox ? { ...base, ...hyroxFields(hyrox) } : base;
   }, [effectiveAct, opts, hyrox]);
+  const series = useMemo(() => {
+    const a = effectiveAct;
+    const km = (a.distance || 0) / 1000;
+    // Relative effort, when Strava has not supplied one: minutes-in-zone weighted (§7.4).
+    let effort;
+    if (a.hrStream?.length) {
+      const max = a.hrMax || 190;
+      const weights = [1, 2, 3, 5, 8];
+      const perSample = (a.time || 0) / a.hrStream.length / 60;
+      const score = a.hrStream.reduce((acc, bpm) => {
+        const f = bpm / max;
+        const z = f < 0.6 ? 0 : f < 0.7 ? 1 : f < 0.8 ? 2 : f < 0.9 ? 3 : 4;
+        return acc + perSample * weights[z];
+      }, 0);
+      effort = Math.max(0, Math.min(100, Math.round((score / (60 * 5)) * 100)));
+    }
+    return {
+      route: a.route || [],
+      hr: a.hrStream || [],
+      hrMax: a.hrMax || undefined,
+      splits: a.splits || [],
+      altitude: a.elev || [],
+      distanceKm: km,
+      durationSeconds: a.time || 0,
+      avgHr: a.hr || undefined,
+      effort,
+      calories: a.calories || undefined,
+    };
+  }, [effectiveAct]);
+
   const assetResolver = useCallback((id) => (id === "photo" && media?.type === "image" ? media.el : null), [media]);
 
   const canvasRef = useRef(null);
   const stateRef = useRef({});
-  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox };
+  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series };
   const startRef = useRef(performance.now());
   useEffect(() => { startRef.current = performance.now(); }, [template, animKey, act, format]);
   useEffect(() => { setFormat(format); }, [format]);
@@ -196,7 +227,7 @@ export default function App() {
       cx.scale(k, k);
       try { renderFrame(cx, media, act, template, { ...opts, animate: false }, 1, 1); } catch {}
       cx.save(); cx.scale(W / 1000, W / 1000);
-      try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver, hyrox }); } catch {}
+      try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver, hyrox, series }); } catch {}
       cx.restore();
       const res = await saveDoc({ ...doc, thumb: c.toDataURL("image/jpeg", 0.6) });
       if (!res.ok && res.reason) setStorageNote(res.reason);
@@ -250,6 +281,7 @@ export default function App() {
         fields: st.fields,
         asset: st.assetResolver,
         hyrox: st.hyrox,
+        series: st.series,
         hideLayerId: st.editingTextId,
       });
       ctx.restore();
@@ -261,7 +293,7 @@ export default function App() {
     const loop = () => { if (!alive) return; draw(); raf = requestAnimationFrame(loop); };
     if (media?.type === "video" || opts.animate) loop(); else draw();
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [media, act, template, opts, format, draw, doc, fields, editingTextId]);
+  }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series]);
 
   // OAuth redirect (?code=...)
   useEffect(() => {
@@ -372,7 +404,7 @@ export default function App() {
     if (doc.layers.length) {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
-      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox });
+      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox, series });
       ctx.restore();
     }
   };
@@ -421,14 +453,14 @@ export default function App() {
         await new Promise((res) => { const h = () => { v.removeEventListener("seeked", h); res(); }; v.addEventListener("seeked", h); setTimeout(res, 800); });
         out = await record((ctx) => {
           renderFrame(ctx, media, act, template, opts, v.duration ? v.currentTime / v.duration : 0, Math.min(1, v.currentTime / ANIM_SECONDS));
-          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: v.currentTime, mode: "full", fields, asset: assetResolver, hyrox }); ctx.restore(); }
+          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: v.currentTime, mode: "full", fields, asset: assetResolver, hyrox, series }); ctx.restore(); }
         }, (v.duration || 5) * 1000, v);
         v.loop = true; v.play().catch(() => {});
       } else {
         const dur = (ANIM_SECONDS + 1.5) * 1000;
         out = await record((ctx, el) => {
           renderFrame(ctx, media, act, template, { ...opts, animate: true }, 1, Math.min(1, el / 1000 / ANIM_SECONDS));
-          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: el / 1000, mode: "full", fields, asset: assetResolver, hyrox }); ctx.restore(); }
+          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: el / 1000, mode: "full", fields, asset: assetResolver, hyrox, series }); ctx.restore(); }
         }, dur, null);
       }
       setResult({ url: URL.createObjectURL(out.blob), blob: out.blob, kind: "video", ext: out.ext, mode: "full" });
@@ -515,7 +547,7 @@ export default function App() {
             <Inspector onDone={clearSelection} />
           )}
 
-          {tab === "add" && <AddMenu onAdded={() => setTab("layers")} />}
+          {tab === "add" && <AddMenu onAdded={() => setTab("style")} />}
           {tab === "hyrox" && selection.length === 0 && (
             <HyroxPanel hyrox={hyrox} onApply={setHyrox} onToast={say} />
           )}

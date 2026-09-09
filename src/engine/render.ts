@@ -17,6 +17,8 @@ export interface DocRenderOptions {
   mode: "full" | "sticker" | "thumb";
   fields: FieldTable;
   asset: (assetId: string) => CanvasImageSource | null;
+  hyrox?: RenderEnv["hyrox"];
+  series?: RenderEnv["series"];
   reducedMotion?: boolean;
   /** Layer currently being edited inline — drawn by the DOM textarea instead. §6.6 */
   hideLayerId?: string | null;
@@ -27,7 +29,7 @@ export interface DocRenderOptions {
  * The caller owns the background and any legacy template pass.
  */
 export function renderLayers(ctx: CanvasRenderingContext2D, doc: Document, options: DocRenderOptions): void {
-  const { t, mode, fields, asset, reducedMotion = false, hideLayerId = null } = options;
+  const { t, mode, fields, asset, hyrox = null, series, reducedMotion = false, hideLayerId = null } = options;
   const isThumb = mode === "thumb";
   const time = isThumb ? Number.POSITIVE_INFINITY : t;
 
@@ -37,7 +39,7 @@ export function renderLayers(ctx: CanvasRenderingContext2D, doc: Document, optio
     if (mode === "sticker" && !layer.sticker) return;
 
     const anim = isThumb || reducedMotion ? STATIC_ANIM : animAt(layer, index, time);
-    const env: RenderEnv = { ctx, fields, asset, anim };
+    const env: RenderEnv = { ctx, fields, asset, anim, hyrox, series };
     const placed = placeLayer(layer, env, doc.format);
 
     ctx.save();
