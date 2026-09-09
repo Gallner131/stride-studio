@@ -12,6 +12,8 @@ import { LayersPanel } from "./ui/LayersPanel.tsx";
 import { HyroxPanel } from "./ui/HyroxPanel.tsx";
 import { TemplateGallery } from "./ui/TemplateGallery.tsx";
 import { LookPicker } from "./ui/LookPicker.tsx";
+import { Suggestions } from "./ui/Suggestions.tsx";
+import { analysePhoto } from "./engine/photo.ts";
 import { getLook, DEFAULT_LOOK_ID } from "./looks/index.ts";
 import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer } from "./model/defaults.ts";
@@ -148,7 +150,19 @@ export default function App() {
 
   const [hyrox, setHyrox] = useState(null);
   const [lookId, setLookId] = useState(DEFAULT_LOOK_ID);
-  const look = useMemo(() => getLook(lookId), [lookId]);
+  const [matchedLook, setMatchedLook] = useState(null);
+  const [analysis, setAnalysis] = useState(null);
+  // A photo-derived look is not in the curated set, so it lives beside it.
+  const look = useMemo(
+    () => (lookId === "from-photo" && matchedLook ? matchedLook : getLook(lookId)),
+    [lookId, matchedLook],
+  );
+
+  // Analyse the photo once, on device, for Match my photo and Three for you (§2.7 S1, S2).
+  useEffect(() => {
+    if (media?.type !== "image") { setAnalysis(null); return; }
+    try { setAnalysis(analysePhoto(media.el)); } catch { setAnalysis(null); }
+  }, [media]);
 
   // A HYROX result drives both the legacy activity (so existing templates work) and the
   // extra {hyroxTotal}, {roxzone}, {station.*} bindings.
@@ -585,7 +599,19 @@ export default function App() {
           )}
 
           {tab === "designs" && (
-            <TemplateGallery caps={caps} onApplied={(name) => say(`${name} applied — tap anything to edit it`)} />
+            <>
+              <Suggestions
+                caps={caps}
+                analysis={analysis}
+                hasPhoto={media?.type === "image"}
+                onApply={(id, matched, name) => {
+                  if (matched) setMatchedLook(matched);
+                  setLookId(id);
+                  say(`${name} applied`);
+                }}
+              />
+                <TemplateGallery caps={caps} onApplied={(name) => say(`${name} applied — tap anything to edit it`)} />
+            </>
           )}
           {tab === "add" && <AddMenu onAdded={() => setTab("style")} />}
           {tab === "hyrox" && (
@@ -605,6 +631,21 @@ export default function App() {
 
           {tab === "look" && selection.length === 0 && (
             <div className="stack">
+              {matchedLook && (
+                <button
+                  type="button"
+                  className={`lookcard wide-look ${lookId === "from-photo" ? "on" : ""}`}
+                  style={{ background: matchedLook.colors.bg, color: matchedLook.colors.text }}
+                  onClick={() => setLookId("from-photo")}
+                  data-testid="look-from-photo"
+                >
+                  <span className="lookcard-swatches">
+                    <i style={{ background: matchedLook.colors.accent }} />
+                    <i style={{ background: matchedLook.colors.accent2 }} />
+                  </span>
+                  <span className="lookcard-name">From your photo</span>
+                </button>
+              )}
               <LookPicker lookId={lookId} onPick={(id) => { setLookId(id); say(`${getLook(id)?.name} applied`); }} />
               <div>
                 <div className="muted small label">Accent (legacy templates)</div>

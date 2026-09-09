@@ -209,3 +209,7 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
 .lookcard-swatches { display: flex; gap: 3px; }
 .lookcard-swatches i { width: 14px; height: 14px; border-radius: 4px; display: block; }
 .lookcard-name { font-size: 11px; opacity: 0.75; }
+.suggestions .tile.suggestion { border-color: #3a3a3c; min-height: 104px; }
+.suggestion-swatches { display: flex; gap: 3px; margin-bottom: 4px; }
+.suggestion-swatches i { width: 16px; height: 16px; border-radius: 4px; display: block; }
+.lookcard.wide-look { flex-direction: row; align-items: center; gap: 10px; min-height: 0; padding: 10px 12px; width: 100%; }
