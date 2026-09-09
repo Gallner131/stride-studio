@@ -17,7 +17,7 @@ export async function openApp(page: Page): Promise<string[]> {
   return errors;
 }
 
-export type TabName = "Style" | "Add" | "Layers" | "Look" | "Text" | "Stats" | "HYROX" | "Adjust";
+export type TabName = "Style" | "Add" | "Layers" | "Look" | "Text" | "Stats" | "HYROX" | "Designs" | "Adjust";
 
 /**
  * Clicks one of the control tabs.

@@ -10,6 +10,7 @@ import { Inspector } from "./ui/Inspector.tsx";
 import { AddMenu } from "./ui/AddMenu.tsx";
 import { LayersPanel } from "./ui/LayersPanel.tsx";
 import { HyroxPanel } from "./ui/HyroxPanel.tsx";
+import { TemplateGallery } from "./ui/TemplateGallery.tsx";
 import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
@@ -181,6 +182,18 @@ export default function App() {
       calories: a.calories || undefined,
     };
   }, [effectiveAct]);
+
+  const caps = useMemo(
+    () => ({
+      route: (effectiveAct.route?.length ?? 0) > 1,
+      hr: (effectiveAct.hrStream?.length ?? 0) > 1 || !!effectiveAct.hr,
+      splits: (effectiveAct.splits?.length ?? 0) > 1,
+      elevation: (effectiveAct.elev?.length ?? 0) > 1,
+      distance: (effectiveAct.distance ?? 0) > 0,
+      hyrox: !!hyrox,
+    }),
+    [effectiveAct, hyrox],
+  );
 
   const assetResolver = useCallback((id) => (id === "photo" && media?.type === "image" ? media.el : null), [media]);
 
@@ -540,15 +553,23 @@ export default function App() {
 
         <section className="controls">
           <nav className="tabs">
-            {[["style", "Style"], ["add", "Add"], ["layers", "Layers"], ["look", "Look"], ["text", "Text"], ["stats", "Stats"], ["hyrox", "HYROX"], ["adjust", "Adjust"]].map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>{l}{k === "layers" && doc.layers.length > 0 ? ` (${doc.layers.length})` : ""}</button>)}
+            {[["style", "Style"], ["designs", "Designs"], ["add", "Add"], ["layers", "Layers"], ["look", "Look"], ["text", "Text"], ["stats", "Stats"], ["hyrox", "HYROX"], ["adjust", "Adjust"]].map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>{l}{k === "layers" && doc.layers.length > 0 ? ` (${doc.layers.length})` : ""}</button>)}
           </nav>
 
-          {selection.length > 0 && tab !== "layers" && tab !== "add" && (
+          {/*
+            The inspector takes over the element-styling tabs, but NOT the document-level
+            ones: switching template, loading data or browsing layers must stay reachable
+            while something is selected.
+          */}
+          {selection.length > 0 && ["style", "look", "text", "adjust"].includes(tab) && (
             <Inspector onDone={clearSelection} />
           )}
 
+          {tab === "designs" && (
+            <TemplateGallery caps={caps} onApplied={(name) => say(`${name} applied — tap anything to edit it`)} />
+          )}
           {tab === "add" && <AddMenu onAdded={() => setTab("style")} />}
-          {tab === "hyrox" && selection.length === 0 && (
+          {tab === "hyrox" && (
             <HyroxPanel hyrox={hyrox} onApply={setHyrox} onToast={say} />
           )}
           {tab === "layers" && <LayersPanel onSelect={() => setTab("style")} />}
