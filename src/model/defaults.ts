@@ -3,6 +3,10 @@ import type {
   Anim,
   Document,
   FormatId,
+  HyroxBreakdownLayer,
+  HyroxLayerStyle,
+  HyroxSplitsLayer,
+  HyroxStationsLayer,
   ImageLayer,
   Layer,
   LayerType,
@@ -133,11 +137,64 @@ export function newStickerLayer(svgId: string, over: Partial<StickerLayer> = {})
   } as StickerLayer;
 }
 
+export const HYROX_STYLE: HyroxLayerStyle = {
+  run: "#5AC8FA",
+  station: "#D8FF3A",
+  roxzone: "#FF5A5F",
+  text: "#FFFFFF",
+  muted: "rgba(255,255,255,0.66)",
+};
+
+export function newHyroxBreakdown(over: Partial<HyroxBreakdownLayer> = {}): HyroxBreakdownLayer {
+  return {
+    ...base("Time breakdown"),
+    type: "hyroxBreakdown",
+    w: 880,
+    h: 220,
+    options: { showLegend: true, showTimes: true },
+    style: { ...HYROX_STYLE },
+    constraints: { minW: 240, safeZone: true },
+    anim: { preset: "slideUp", delay: "auto", duration: 0.9, ease: "outCubic" },
+    ...over,
+  } as HyroxBreakdownLayer;
+}
+
+export function newHyroxStations(over: Partial<HyroxStationsLayer> = {}): HyroxStationsLayer {
+  return {
+    ...base("Stations"),
+    type: "hyroxStations",
+    w: 880,
+    h: 520,
+    options: { markSlowest: true, showTimes: true },
+    style: { ...HYROX_STYLE },
+    constraints: { minW: 300, safeZone: true },
+    anim: { preset: "slideUp", delay: "auto", duration: 1.2, ease: "outCubic" },
+    ...over,
+  } as HyroxStationsLayer;
+}
+
+export function newHyroxSplits(over: Partial<HyroxSplitsLayer> = {}): HyroxSplitsLayer {
+  return {
+    ...base("Splits"),
+    type: "hyroxSplits",
+    w: 760,
+    h: 900,
+    options: { interleave: true, showRoxzone: true },
+    style: { ...HYROX_STYLE },
+    constraints: { minW: 280, safeZone: true },
+    anim: { preset: "fadeIn", delay: "auto", duration: 1.0, ease: "outCubic" },
+    ...over,
+  } as HyroxSplitsLayer;
+}
+
 export const LAYER_LABEL: Record<LayerType, string> = {
   text: "Text",
   shape: "Shape",
   image: "Photo / logo",
   sticker: "Sticker",
+  hyroxBreakdown: "Time breakdown",
+  hyroxStations: "Stations",
+  hyroxSplits: "Splits",
 };
 
 export function newDocument(over: Partial<Document> = {}): Document {

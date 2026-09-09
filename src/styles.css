@@ -184,3 +184,13 @@ input.wide{width:100%;padding:9px 11px;border-radius:9px;border:1px solid #3a3a3
 .inspector textarea.wide { width: 100%; background: #111; color: #f2f2f2; border: 1px solid #2a2a2c; border-radius: 10px; padding: 8px; font: inherit; resize: vertical; }
 /* Inspector rows are fieldsets for grouping semantics; strip the default chrome. */
 fieldset.ins-row { border: 0; margin: 0; padding: 0; }
+
+/* ---------- HYROX ---------- */
+.hyrox-paste { min-height: 110px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+.hyrox-problems { margin: 10px 0 0; padding-left: 18px; color: #ffb347; }
+.hyrox-problems li { margin-bottom: 2px; }
+.hyrox-panel .tiles { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+.hyrox-panel .field { display: flex; flex-direction: column; gap: 4px; }
+.hyrox-panel .field input, .hyrox-panel .field select {
+  background: #111; color: #f2f2f2; border: 1px solid #2a2a2c; border-radius: 8px; padding: 8px; font-size: 13px;
+}

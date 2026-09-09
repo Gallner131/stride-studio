@@ -7,6 +7,9 @@ const ICON: Record<Layer["type"], string> = {
   shape: "▭",
   image: "▣",
   sticker: "★",
+  hyroxBreakdown: "▤",
+  hyroxStations: "▥",
+  hyroxSplits: "☰",
 };
 
 /** Layers panel — §6.7. Top layer first; tap to select, drag to reorder. */

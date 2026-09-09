@@ -127,7 +127,44 @@ export interface StickerLayer extends LayerBase {
   style: { fill: string; stroke: string | null; strokeWidth: number };
 }
 
-export type Layer = TextLayer | ShapeLayer | ImageLayer | StickerLayer;
+/** Colour tokens shared by the HYROX visuals. */
+export interface HyroxLayerStyle {
+  run: string;
+  station: string;
+  roxzone: string;
+  text: string;
+  muted: string;
+}
+
+/** Running vs stations vs roxzone, as one stacked bar. */
+export interface HyroxBreakdownLayer extends LayerBase {
+  type: "hyroxBreakdown";
+  options: { showLegend: boolean; showTimes: boolean };
+  style: HyroxLayerStyle;
+}
+
+/** Eight bars, one per station, slowest marked. */
+export interface HyroxStationsLayer extends LayerBase {
+  type: "hyroxStations";
+  options: { markSlowest: boolean; showTimes: boolean };
+  style: HyroxLayerStyle;
+}
+
+/** The full 16-segment splits table. */
+export interface HyroxSplitsLayer extends LayerBase {
+  type: "hyroxSplits";
+  options: { interleave: boolean; showRoxzone: boolean };
+  style: HyroxLayerStyle;
+}
+
+export type Layer =
+  | TextLayer
+  | ShapeLayer
+  | ImageLayer
+  | StickerLayer
+  | HyroxBreakdownLayer
+  | HyroxStationsLayer
+  | HyroxSplitsLayer;
 export type LayerType = Layer["type"];
 
 export interface Document {

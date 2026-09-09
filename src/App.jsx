@@ -9,6 +9,8 @@ import { StudioOverlay } from "./ui/StudioOverlay.tsx";
 import { Inspector } from "./ui/Inspector.tsx";
 import { AddMenu } from "./ui/AddMenu.tsx";
 import { LayersPanel } from "./ui/LayersPanel.tsx";
+import { HyroxPanel } from "./ui/HyroxPanel.tsx";
+import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
   W, H, FORMATS, setFormat, ANIM_SECONDS, DEMO, DEMO_WORKOUT, SPORTS, sportFromStrava, CATEGORIES, TEMPLATES, PALETTE, FILTERS, FONTS, BACKGROUNDS, DEFAULT_OPTS,
@@ -140,12 +142,20 @@ export default function App() {
   const canUndo = temporal.pastStates.length > 0;
   const canRedo = temporal.futureStates.length > 0;
 
-  const fields = useMemo(() => buildFields(act, opts), [act, opts]);
+  const [hyrox, setHyrox] = useState(null);
+
+  // A HYROX result drives both the legacy activity (so existing templates work) and the
+  // extra {hyroxTotal}, {roxzone}, {station.*} bindings.
+  const effectiveAct = useMemo(() => (hyrox ? { ...act, ...hyroxToActivity(hyrox) } : act), [act, hyrox]);
+  const fields = useMemo(() => {
+    const base = buildFields(effectiveAct, opts);
+    return hyrox ? { ...base, ...hyroxFields(hyrox) } : base;
+  }, [effectiveAct, opts, hyrox]);
   const assetResolver = useCallback((id) => (id === "photo" && media?.type === "image" ? media.el : null), [media]);
 
   const canvasRef = useRef(null);
   const stateRef = useRef({});
-  stateRef.current = { media, act, template, opts, format, doc, fields, assetResolver, editingTextId };
+  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox };
   const startRef = useRef(performance.now());
   useEffect(() => { startRef.current = performance.now(); }, [template, animKey, act, format]);
   useEffect(() => { setFormat(format); }, [format]);
@@ -186,7 +196,7 @@ export default function App() {
       cx.scale(k, k);
       try { renderFrame(cx, media, act, template, { ...opts, animate: false }, 1, 1); } catch {}
       cx.save(); cx.scale(W / 1000, W / 1000);
-      try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver }); } catch {}
+      try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver, hyrox }); } catch {}
       cx.restore();
       const res = await saveDoc({ ...doc, thumb: c.toDataURL("image/jpeg", 0.6) });
       if (!res.ok && res.reason) setStorageNote(res.reason);
@@ -239,6 +249,7 @@ export default function App() {
         mode: "full",
         fields: st.fields,
         asset: st.assetResolver,
+        hyrox: st.hyrox,
         hideLayerId: st.editingTextId,
       });
       ctx.restore();
@@ -357,11 +368,11 @@ export default function App() {
   const fileName = (ext) => `${(act.name || "activity").replace(/[^\w-]+/g, "-").toLowerCase()}-${fmtDist(derive(act, opts).dist)}${opts.units}.${ext}`;
 
   const drawFull = (ctx, mode, t = Number.POSITIVE_INFINITY) => {
-    renderFrame(ctx, media, act, template, opts, 1, 1, mode);
+    renderFrame(ctx, media, effectiveAct, template, opts, 1, 1, mode);
     if (doc.layers.length) {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
-      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver });
+      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox });
       ctx.restore();
     }
   };
@@ -410,14 +421,14 @@ export default function App() {
         await new Promise((res) => { const h = () => { v.removeEventListener("seeked", h); res(); }; v.addEventListener("seeked", h); setTimeout(res, 800); });
         out = await record((ctx) => {
           renderFrame(ctx, media, act, template, opts, v.duration ? v.currentTime / v.duration : 0, Math.min(1, v.currentTime / ANIM_SECONDS));
-          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: v.currentTime, mode: "full", fields, asset: assetResolver }); ctx.restore(); }
+          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: v.currentTime, mode: "full", fields, asset: assetResolver, hyrox }); ctx.restore(); }
         }, (v.duration || 5) * 1000, v);
         v.loop = true; v.play().catch(() => {});
       } else {
         const dur = (ANIM_SECONDS + 1.5) * 1000;
         out = await record((ctx, el) => {
           renderFrame(ctx, media, act, template, { ...opts, animate: true }, 1, Math.min(1, el / 1000 / ANIM_SECONDS));
-          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: el / 1000, mode: "full", fields, asset: assetResolver }); ctx.restore(); }
+          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: el / 1000, mode: "full", fields, asset: assetResolver, hyrox }); ctx.restore(); }
         }, dur, null);
       }
       setResult({ url: URL.createObjectURL(out.blob), blob: out.blob, kind: "video", ext: out.ext, mode: "full" });
@@ -434,7 +445,7 @@ export default function App() {
     } catch (e) { if (e.name !== "AbortError") say(`Could not share: ${e.message}`); }
   };
   const copyCaption = async () => {
-    try { await navigator.clipboard.writeText(captionFor(act, opts)); say("Caption copied"); } catch { say("Copy failed. Long-press the caption text instead."); }
+    try { await navigator.clipboard.writeText(captionFor(effectiveAct, opts)); say("Caption copied"); } catch { say("Copy failed. Long-press the caption text instead."); }
   };
 
   const set = (k, val) => setOpts((o) => ({ ...o, [k]: val }));
@@ -447,7 +458,7 @@ export default function App() {
     setTemplate(t); setOpts((o) => ({ ...o, accent: a, filter: f, theme: a === "#111111" ? "dark" : "light" }));
   };
 
-  const d = useMemo(() => derive(act, opts), [act, opts]);
+  const d = useMemo(() => derive(effectiveAct, opts), [effectiveAct, opts]);
   const hasPosition = ["sticker", "ticker", "bib", "grid", "stamp"].includes(template);
   const hasMap = ["hud", "poster", "frame", "corner", "headline", "polaroid", "retro", "neon"].includes(template);
   const shown = TEMPLATES.filter((t) => cat === "All" || t.cat === cat);
@@ -497,7 +508,7 @@ export default function App() {
 
         <section className="controls">
           <nav className="tabs">
-            {[["style", "Style"], ["add", "Add"], ["layers", "Layers"], ["look", "Look"], ["text", "Text"], ["stats", "Stats"], ["adjust", "Adjust"]].map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>{l}{k === "layers" && doc.layers.length > 0 ? ` (${doc.layers.length})` : ""}</button>)}
+            {[["style", "Style"], ["add", "Add"], ["layers", "Layers"], ["look", "Look"], ["text", "Text"], ["stats", "Stats"], ["hyrox", "HYROX"], ["adjust", "Adjust"]].map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>{l}{k === "layers" && doc.layers.length > 0 ? ` (${doc.layers.length})` : ""}</button>)}
           </nav>
 
           {selection.length > 0 && tab !== "layers" && tab !== "add" && (
@@ -505,6 +516,9 @@ export default function App() {
           )}
 
           {tab === "add" && <AddMenu onAdded={() => setTab("layers")} />}
+          {tab === "hyrox" && selection.length === 0 && (
+            <HyroxPanel hyrox={hyrox} onApply={setHyrox} onToast={say} />
+          )}
           {tab === "layers" && <LayersPanel onSelect={() => setTab("style")} />}
 
           {tab === "style" && selection.length === 0 && (
@@ -595,8 +609,13 @@ export default function App() {
               <div className="card">
                 <div className="row">
                   <div>
-                    <strong>{act.name}</strong> <span className="muted small">{SPORTS[act.sport]?.label || "Run"}</span>
-                    <div className="muted small">{d.hasDist ? `${fmtDist(d.dist)} ${d.unit}, ` : ""}{fmtTime(act.time)}{d.hasDist ? `, ${d.paceStr}` : ""}{act.elevation ? `, ${Math.round(d.elevV)} ${d.elevU}` : ""}{act.hr ? `, ${act.hr} bpm` : ""}</div>
+                    <strong>{effectiveAct.name}</strong> <span className="muted small">{hyrox ? "HYROX" : SPORTS[effectiveAct.sport]?.label || "Run"}</span>
+                    <div className="muted small">{d.hasDist ? `${fmtDist(d.dist)} ${d.unit}, ` : ""}{fmtTime(effectiveAct.time)}{d.hasDist ? `, ${d.paceStr}` : ""}{effectiveAct.elevation ? `, ${Math.round(d.elevV)} ${d.elevU}` : ""}{effectiveAct.hr ? `, ${effectiveAct.hr} bpm` : ""}</div>
+                    {hyrox && (
+                      <div className="muted small">
+                        8 km of running in {hyroxFields(hyrox).runTotal} · {hyroxFields(hyrox).runPace}
+                      </div>
+                    )}
                   </div>
                   <button type="button" className="link" onClick={() => setShowManual((s) => !s)} data-testid="edit-stats">{showManual ? "Done" : "Edit"}</button>
                 </div>
@@ -614,7 +633,7 @@ export default function App() {
               </div>
               <div className="card">
                 <div className="muted small label">Caption</div>
-                <pre className="caption">{captionFor(act, opts)}</pre>
+                <pre className="caption">{captionFor(effectiveAct, opts)}</pre>
                 <button type="button" className="btn" onClick={copyCaption} data-testid="copy-caption">Copy caption</button>
               </div>
             </div>

@@ -10,8 +10,7 @@ export const FONT_STACKS: Record<string, string> = {
   rounded: '"SF Pro Rounded", "Arial Rounded MT Bold", Nunito, "Varela Round", system-ui, sans-serif',
 };
 
-const SANS_FALLBACK =
-  'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+const SANS_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 export const fontStack = (id: string): string => FONT_STACKS[id] ?? SANS_FALLBACK;
 

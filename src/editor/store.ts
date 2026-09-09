@@ -193,7 +193,15 @@ export const firstSelected = (s: EditorState): Layer | null =>
   s.doc.layers.find((l) => l.id === s.selection[0]) ?? null;
 
 export const layerCountByType = (s: EditorState): Record<LayerType, number> => {
-  const out = { text: 0, shape: 0, image: 0, sticker: 0 };
+  const out: Record<LayerType, number> = {
+    text: 0,
+    shape: 0,
+    image: 0,
+    sticker: 0,
+    hyroxBreakdown: 0,
+    hyroxStations: 0,
+    hyroxSplits: 0,
+  };
   for (const l of s.doc.layers) out[l.type]++;
   return out;
 };

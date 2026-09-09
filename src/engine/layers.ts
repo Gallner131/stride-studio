@@ -2,9 +2,20 @@
 // measure(). Adding a layer type is a new entry, never a switch statement.
 import type { FieldTable } from "../model/bindings";
 import { resolveBindings } from "../model/bindings";
-import type { ImageLayer, Layer, ShapeLayer, StickerLayer, TextLayer } from "../model/types";
+import type { HyroxResult } from "../model/hyrox";
+import type {
+  HyroxBreakdownLayer,
+  HyroxSplitsLayer,
+  HyroxStationsLayer,
+  ImageLayer,
+  Layer,
+  ShapeLayer,
+  StickerLayer,
+  TextLayer,
+} from "../model/types";
 import type { AnimState } from "./anim";
 import { typewriter } from "./anim";
+import { DEFAULT_HYROX_STYLE, drawHyroxBreakdown, drawHyroxSplits, drawHyroxStations } from "./hyroxLayers";
 import { stickerPath } from "./stickers";
 import { applyLetterSpacing, clearLetterSpacing, cssFont, measureRun, wrapText } from "./text";
 
@@ -14,6 +25,8 @@ export interface RenderEnv {
   /** Resolves an image asset id to something drawable. */
   asset: (assetId: string) => CanvasImageSource | null;
   anim: AnimState;
+  /** The current HYROX result, when the activity is a HYROX race. */
+  hyrox?: HyroxResult | null;
 }
 
 export interface Box {
@@ -307,6 +320,78 @@ const stickerRenderer: LayerRenderer<StickerLayer> = {
 
 const STROKE_ONLY = new Set(["wind", "check", "cross", "route"]);
 
+// ---------------------------------------------------------------- HYROX
+
+const fixed = (layer: Layer, fw: number, fh: number): Box => ({
+  w: typeof layer.w === "number" ? layer.w : fw,
+  h: typeof layer.h === "number" ? layer.h : fh,
+});
+
+const hyroxStyleOf = (style: {
+  run: string;
+  station: string;
+  roxzone: string;
+  text: string;
+  muted: string;
+}) => ({
+  ...DEFAULT_HYROX_STYLE,
+  ...style,
+});
+
+/** Drawn when there is no HYROX result yet, so the layer is visible and explains itself. */
+function drawHyroxPlaceholder(ctx: CanvasRenderingContext2D, w: number, h: number, label: string): void {
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.setLineDash([10, 8]);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, w, h);
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,255,255,0.66)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `600 ${Math.max(16, Math.min(28, h * 0.12))}px ${DEFAULT_HYROX_STYLE.font}`;
+  ctx.fillText(label, w / 2, h / 2 - 12);
+  ctx.font = `500 ${Math.max(13, Math.min(22, h * 0.09))}px ${DEFAULT_HYROX_STYLE.font}`;
+  ctx.fillText("Paste your HYROX splits in the Data tab", w / 2, h / 2 + 18);
+  ctx.restore();
+}
+
+const hyroxBreakdownRenderer: LayerRenderer<HyroxBreakdownLayer> = {
+  measure: (layer) => fixed(layer, 880, 220),
+  render(layer, env) {
+    const { w, h } = fixed(layer, 880, 220);
+    if (!env.hyrox) return drawHyroxPlaceholder(env.ctx, w, h, "Time breakdown");
+    drawHyroxBreakdown(env.ctx, env.hyrox, w, h, hyroxStyleOf(layer.style), {
+      ...layer.options,
+      progress: env.anim.progress,
+    });
+  },
+};
+
+const hyroxStationsRenderer: LayerRenderer<HyroxStationsLayer> = {
+  measure: (layer) => fixed(layer, 880, 520),
+  render(layer, env) {
+    const { w, h } = fixed(layer, 880, 520);
+    if (!env.hyrox) return drawHyroxPlaceholder(env.ctx, w, h, "Station times");
+    drawHyroxStations(env.ctx, env.hyrox, w, h, hyroxStyleOf(layer.style), {
+      ...layer.options,
+      progress: env.anim.progress,
+    });
+  },
+};
+
+const hyroxSplitsRenderer: LayerRenderer<HyroxSplitsLayer> = {
+  measure: (layer) => fixed(layer, 760, 900),
+  render(layer, env) {
+    const { w, h } = fixed(layer, 760, 900);
+    if (!env.hyrox) return drawHyroxPlaceholder(env.ctx, w, h, "Splits");
+    drawHyroxSplits(env.ctx, env.hyrox, w, h, hyroxStyleOf(layer.style), {
+      ...layer.options,
+      progress: env.anim.progress,
+    });
+  },
+};
+
 // ---------------------------------------------------------------- registry
 
 export const RENDERERS = {
@@ -314,6 +399,9 @@ export const RENDERERS = {
   shape: shapeRenderer,
   image: imageRenderer,
   sticker: stickerRenderer,
+  hyroxBreakdown: hyroxBreakdownRenderer,
+  hyroxStations: hyroxStationsRenderer,
+  hyroxSplits: hyroxSplitsRenderer,
 } as const;
 
 export function measureLayer(layer: Layer, env: RenderEnv): Box {
@@ -326,6 +414,12 @@ export function measureLayer(layer: Layer, env: RenderEnv): Box {
       return RENDERERS.image.measure(layer, env);
     case "sticker":
       return RENDERERS.sticker.measure(layer, env);
+    case "hyroxBreakdown":
+      return RENDERERS.hyroxBreakdown.measure(layer, env);
+    case "hyroxStations":
+      return RENDERERS.hyroxStations.measure(layer, env);
+    case "hyroxSplits":
+      return RENDERERS.hyroxSplits.measure(layer, env);
   }
 }
 
@@ -342,6 +436,15 @@ export function renderLayer(layer: Layer, env: RenderEnv): void {
       return;
     case "sticker":
       RENDERERS.sticker.render(layer, env);
+      return;
+    case "hyroxBreakdown":
+      RENDERERS.hyroxBreakdown.render(layer, env);
+      return;
+    case "hyroxStations":
+      RENDERERS.hyroxStations.render(layer, env);
+      return;
+    case "hyroxSplits":
+      RENDERERS.hyroxSplits.render(layer, env);
       return;
   }
 }
