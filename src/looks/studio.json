@@ -1,0 +1,53 @@
+{
+  "id": "studio",
+  "name": "Studio",
+  "family": "health",
+  "colors": {
+    "bg": "#EEE9DF",
+    "surface": "rgba(0,0,0,.05)",
+    "text": "#2F3A34",
+    "textMuted": "rgba(47,58,52,.65)",
+    "accent": "#6F8C73",
+    "accent2": "#D8B08C"
+  },
+  "fonts": {
+    "display": "fraunces",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "serif",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 24,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": 0.01,
+    "displayWeight": 500,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.06,
+    "vignette": 0,
+    "pattern": null
+  },
+  "legibility": "scrim",
+  "chart": {
+    "zones": "sage",
+    "zoneColors": ["#B8C4B0", "#93A98C", "#7A9A7E", "#C9A27A", "#B5674D"]
+  },
+  "photo": {
+    "suits": ["soft", "yoga", "indoor"]
+  },
+  "motion": {
+    "ease": "outCubic",
+    "speed": 0.85,
+    "entrance": "fadeIn",
+    "loop": null
+  }
+}

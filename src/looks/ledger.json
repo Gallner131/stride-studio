@@ -1,0 +1,54 @@
+{
+  "id": "ledger",
+  "name": "Ledger",
+  "family": "data",
+  "colors": {
+    "bg": "#F7F3EA",
+    "surface": "#FFFFFF",
+    "text": "#111111",
+    "textMuted": "rgba(17,17,17,.60)",
+    "accent": "#111111",
+    "accent2": "#E8461E"
+  },
+  "fonts": {
+    "display": "jetbrains",
+    "body": "jetbrains",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "mono",
+    "body": "mono"
+  },
+  "shape": {
+    "radius": 2,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0,
+    "displayWeight": 700,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.06,
+    "vignette": 0,
+    "pattern": null
+  },
+  "legibility": "pill",
+  "chart": {
+    "zones": "greys",
+    "zoneColors": ["#DDDDDD", "#BBBBBB", "#999999", "#666666", "#111111"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "linear",
+    "speed": 1,
+    "entrance": "fadeIn",
+    "loop": null
+  },
+  "accentIsText": true
+}

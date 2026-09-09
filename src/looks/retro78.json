@@ -1,0 +1,53 @@
+{
+  "id": "retro78",
+  "name": "Retro '78",
+  "family": "fun",
+  "colors": {
+    "bg": "#F1DDB3",
+    "surface": "#2B1D14",
+    "text": "#2B1D14",
+    "textMuted": "rgba(43,29,20,.65)",
+    "accent": "#B46C24",
+    "accent2": "#8C2F1A"
+  },
+  "fonts": {
+    "display": "unbounded",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "cond",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 0,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.06,
+    "displayWeight": 900,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.22,
+    "vignette": 0.15,
+    "pattern": "stripes"
+  },
+  "legibility": "pill",
+  "chart": {
+    "zones": "warm",
+    "zoneColors": ["#C9B79C", "#E0A458", "#E8461E", "#B8462E", "#6B1D12"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "outExpo",
+    "speed": 1.05,
+    "entrance": "slideUp",
+    "loop": null
+  }
+}

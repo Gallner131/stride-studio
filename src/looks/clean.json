@@ -1,0 +1,54 @@
+{
+  "id": "clean",
+  "name": "Clean",
+  "family": "quiet",
+  "colors": {
+    "bg": "#111111",
+    "surface": "rgba(255,255,255,.10)",
+    "text": "#FFFFFF",
+    "textMuted": "rgba(255,255,255,.70)",
+    "accent": "#FFFFFF",
+    "accent2": "rgba(255,255,255,.50)"
+  },
+  "fonts": {
+    "display": "inter",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "sans",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 16,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": -0.02,
+    "displayWeight": 800,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0,
+    "vignette": 0.25,
+    "pattern": null
+  },
+  "legibility": "shadow",
+  "chart": {
+    "zones": "default",
+    "zoneColors": ["#8FA3B5", "#4FC1E9", "#7BE495", "#FFB347", "#FF5A5F"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "outCubic",
+    "speed": 1,
+    "entrance": "slideUp",
+    "loop": null
+  },
+  "accentIsText": true
+}

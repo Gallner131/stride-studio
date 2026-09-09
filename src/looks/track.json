@@ -1,0 +1,53 @@
+{
+  "id": "track",
+  "name": "Track",
+  "family": "loud",
+  "colors": {
+    "bg": "#141414",
+    "surface": "#1B1B1B",
+    "text": "#F2E8D5",
+    "textMuted": "rgba(242,232,213,.75)",
+    "accent": "#E8461E",
+    "accent2": "#FFD23F"
+  },
+  "fonts": {
+    "display": "anton",
+    "body": "grotesk",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "cond",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 0,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.04,
+    "displayWeight": 400,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.15,
+    "vignette": 0.2,
+    "pattern": "stripes"
+  },
+  "legibility": "pill",
+  "chart": {
+    "zones": "warm",
+    "zoneColors": ["#C9B79C", "#E0A458", "#E8461E", "#B8462E", "#6B1D12"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "outExpo",
+    "speed": 1.15,
+    "entrance": "slideUp",
+    "loop": null
+  }
+}

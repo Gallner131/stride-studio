@@ -1,0 +1,54 @@
+{
+  "id": "broadsheet",
+  "name": "Broadsheet",
+  "family": "editorial",
+  "colors": {
+    "bg": "#FFFFFF",
+    "surface": "#F4F4F4",
+    "text": "#000000",
+    "textMuted": "#555555",
+    "accent": "#000000",
+    "accent2": "#C8102E"
+  },
+  "fonts": {
+    "display": "playfair",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "serif",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 0,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": -0.01,
+    "displayWeight": 900,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.05,
+    "vignette": 0,
+    "pattern": "rules"
+  },
+  "legibility": "pill",
+  "chart": {
+    "zones": "greys",
+    "zoneColors": ["#DDDDDD", "#BBBBBB", "#999999", "#666666", "#111111"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "linear",
+    "speed": 0.85,
+    "entrance": "fadeIn",
+    "loop": null
+  },
+  "accentIsText": true
+}

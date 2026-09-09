@@ -119,9 +119,12 @@ export function unavailableReason(def: TemplateDef, caps: ActivityCapabilities):
 
 // ---------------------------------------------------------------- the templates
 
-const WHITE = "#FFFFFF";
-const MUTED = "rgba(255,255,255,0.72)";
-const VOLT = "#D8FF3A";
+// Templates reference LOOK TOKENS rather than literal colours (§4.3). That is what makes
+// swapping a look restyle every design at once; a colour the user picks by hand becomes a
+// literal and survives the swap.
+const WHITE = "$text";
+const MUTED = "$textMuted";
+const VOLT = "$accent";
 
 export const TEMPLATES: TemplateDef[] = [
   {
@@ -243,7 +246,7 @@ export const TEMPLATES: TemplateDef[] = [
         style: {
           size: 52,
           weight: 800,
-          color: "#111111",
+          color: "$bg",
           align: "center",
           letterSpacing: 0.08,
           shadow: false,
@@ -423,7 +426,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.5, ay: 0.5 },
         origin: { ox: 0.5, oy: 0.5 },
         offset: { dx: 0, dy: -120 },
-        style: { fill: "#1F4FBF", radius: 0 },
+        style: { fill: "$accent2", radius: 0 },
         anim: { preset: "slideLeft", delay: 0.1, duration: 0.6, ease: "outCubic" },
       },
       {
@@ -450,7 +453,7 @@ export const TEMPLATES: TemplateDef[] = [
         origin: { ox: 0.5, oy: 0.5 },
         offset: { dx: 0, dy: 220 },
         showLabel: false,
-        style: { valueSize: 400, valueColor: "#FFD23F", align: "center", letterSpacing: -0.04 },
+        style: { valueSize: 400, valueColor: "$accent", align: "center", letterSpacing: -0.04 },
       },
     ],
   },

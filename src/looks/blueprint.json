@@ -1,0 +1,54 @@
+{
+  "id": "blueprint",
+  "name": "Blueprint",
+  "family": "data",
+  "colors": {
+    "bg": "#0F3DA8",
+    "surface": "rgba(255,255,255,.10)",
+    "text": "#FFFFFF",
+    "textMuted": "rgba(255,255,255,.70)",
+    "accent": "#FFFFFF",
+    "accent2": "#9FC5FF"
+  },
+  "fonts": {
+    "display": "grotesk",
+    "body": "jetbrains",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "sans",
+    "body": "mono"
+  },
+  "shape": {
+    "radius": 0,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.06,
+    "displayWeight": 700,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.05,
+    "vignette": 0,
+    "pattern": "grid"
+  },
+  "legibility": "scrim",
+  "chart": {
+    "zones": "blues",
+    "zoneColors": ["#BFD3FF", "#9FC5FF", "#6FA3FF", "#FFFFFF", "#FFD166"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "linear",
+    "speed": 1,
+    "entrance": "fadeIn",
+    "loop": null
+  },
+  "accentIsText": true
+}

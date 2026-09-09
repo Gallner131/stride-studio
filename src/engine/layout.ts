@@ -7,6 +7,7 @@ import { CANVAS_W, canvasHeight } from "../model/defaults";
 import type { Document, Layer, Placed } from "../model/types";
 import type { RenderEnv } from "./layers";
 import { measureLayer } from "./layers";
+import { type Look, resolveLayer } from "./tokens";
 
 export interface LayoutResult {
   placed: Placed[];
@@ -50,8 +51,10 @@ export function placeLayer(layer: Layer, env: RenderEnv, format: Document["forma
   return { id: layer.id, box: { x, y, w, h }, rotation: layer.rotation, corners };
 }
 
-export function layoutDoc(doc: Document, env: RenderEnv): LayoutResult {
-  const placed = doc.layers.map((l) => placeLayer(l, env, doc.format));
+export function layoutDoc(doc: Document, env: RenderEnv, look: Look | null = null): LayoutResult {
+  // Measure the RESOLVED layer: a token font or size changes the box, and hit-testing must
+  // agree with what was drawn.
+  const placed = doc.layers.map((l) => placeLayer(resolveLayer(l, look), env, doc.format));
   return { placed, byId: new Map(placed.map((p) => [p.id, p])) };
 }
 

@@ -1,0 +1,54 @@
+{
+  "id": "iron",
+  "name": "Iron",
+  "family": "health",
+  "colors": {
+    "bg": "#0C0C0C",
+    "surface": "#1A1A1A",
+    "text": "#F5F5F5",
+    "textMuted": "rgba(245,245,245,.60)",
+    "accent": "#F5F5F5",
+    "accent2": "#9AA0A6"
+  },
+  "fonts": {
+    "display": "shoulders",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "cond",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 4,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.05,
+    "displayWeight": 900,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.18,
+    "vignette": 0.5,
+    "pattern": null
+  },
+  "legibility": "shadow",
+  "chart": {
+    "zones": "iron",
+    "zoneColors": ["#DDDDDD", "#BBBBBB", "#999999", "#666666", "#FF3B4A"]
+  },
+  "photo": {
+    "suits": ["gym mirror", "dark"]
+  },
+  "motion": {
+    "ease": "outExpo",
+    "speed": 1.1,
+    "entrance": "slideUp",
+    "loop": null
+  },
+  "accentIsText": true
+}

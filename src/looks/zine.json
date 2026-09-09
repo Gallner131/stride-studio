@@ -1,0 +1,54 @@
+{
+  "id": "zine",
+  "name": "Zine",
+  "family": "editorial",
+  "colors": {
+    "bg": "#EDE6D6",
+    "surface": "#111111",
+    "text": "#111111",
+    "textMuted": "rgba(17,17,17,.65)",
+    "accent": "#111111",
+    "accent2": "#FF3B30"
+  },
+  "fonts": {
+    "display": "archivo",
+    "body": "jetbrains",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "cond",
+    "body": "mono"
+  },
+  "shape": {
+    "radius": 0,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.02,
+    "displayWeight": 400,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.2,
+    "vignette": 0.1,
+    "pattern": "halftone"
+  },
+  "legibility": "pill",
+  "chart": {
+    "zones": "greys",
+    "zoneColors": ["#DDDDDD", "#BBBBBB", "#999999", "#666666", "#111111"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "outCubic",
+    "speed": 1.1,
+    "entrance": "scaleIn",
+    "loop": null
+  },
+  "accentIsText": true
+}

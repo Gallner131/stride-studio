@@ -260,6 +260,8 @@ export interface Document {
   format: FormatId;
   /** Legacy template id while templates are still code (§13 Phase 2 makes these data). */
   templateId: string;
+  /** Curated look id, resolving the layers' "$token" references (§4.5). */
+  lookId?: string;
   layers: Layer[];
   units: "km" | "mi";
   prefs: { safeZones: boolean };

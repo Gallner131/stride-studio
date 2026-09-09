@@ -1,0 +1,54 @@
+{
+  "id": "paper",
+  "name": "Paper",
+  "family": "editorial",
+  "colors": {
+    "bg": "#F4EFE6",
+    "surface": "rgba(0,0,0,.05)",
+    "text": "#1A1714",
+    "textMuted": "rgba(26,23,20,.62)",
+    "accent": "#1A1714",
+    "accent2": "#B8462E"
+  },
+  "fonts": {
+    "display": "fraunces",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "serif",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 4,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": -0.01,
+    "displayWeight": 700,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.12,
+    "vignette": 0.1,
+    "pattern": null
+  },
+  "legibility": "scrim",
+  "chart": {
+    "zones": "greys",
+    "zoneColors": ["#DDDDDD", "#BBBBBB", "#999999", "#666666", "#111111"]
+  },
+  "photo": {
+    "suits": ["soft light", "any"]
+  },
+  "motion": {
+    "ease": "linear",
+    "speed": 0.8,
+    "entrance": "typewriter",
+    "loop": null
+  },
+  "accentIsText": true
+}

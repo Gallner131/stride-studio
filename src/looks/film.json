@@ -1,0 +1,54 @@
+{
+  "id": "film",
+  "name": "Film",
+  "family": "quiet",
+  "colors": {
+    "bg": "#1A1512",
+    "surface": "rgba(245,235,220,.10)",
+    "text": "#F3E9D8",
+    "textMuted": "rgba(243,233,216,.66)",
+    "accent": "#F3E9D8",
+    "accent2": "#C99A5B"
+  },
+  "fonts": {
+    "display": "fraunces",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "serif",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 6,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": 0,
+    "displayWeight": 600,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.14,
+    "vignette": 0.35,
+    "pattern": null
+  },
+  "legibility": "shadow",
+  "chart": {
+    "zones": "warm",
+    "zoneColors": ["#C9B79C", "#E0A458", "#E8461E", "#B8462E", "#6B1D12"]
+  },
+  "photo": {
+    "suits": ["golden hour", "forest"]
+  },
+  "motion": {
+    "ease": "outCubic",
+    "speed": 0.9,
+    "entrance": "fadeIn",
+    "loop": null
+  },
+  "accentIsText": true
+}

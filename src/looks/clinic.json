@@ -1,0 +1,53 @@
+{
+  "id": "clinic",
+  "name": "Clinic",
+  "family": "health",
+  "colors": {
+    "bg": "#FFFFFF",
+    "surface": "#F3F5F7",
+    "text": "#0F172A",
+    "textMuted": "#64748B",
+    "accent": "#21A392",
+    "accent2": "#FF5A5F"
+  },
+  "fonts": {
+    "display": "inter",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "sans",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 20,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": -0.01,
+    "displayWeight": 700,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0,
+    "vignette": 0,
+    "pattern": null
+  },
+  "legibility": "pill",
+  "chart": {
+    "zones": "clinical",
+    "zoneColors": ["#94A3B8", "#38BDF8", "#34D399", "#FBBF24", "#F43F5E"]
+  },
+  "photo": {
+    "suits": ["bright", "indoor"]
+  },
+  "motion": {
+    "ease": "outCubic",
+    "speed": 1,
+    "entrance": "slideUp",
+    "loop": "heartbeat"
+  }
+}

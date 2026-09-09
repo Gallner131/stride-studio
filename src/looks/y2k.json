@@ -1,0 +1,55 @@
+{
+  "id": "y2k",
+  "name": "Y2K",
+  "family": "fun",
+  "colors": {
+    "bg": "#1B1830",
+    "surface": "rgba(255,255,255,.12)",
+    "text": "#FFFFFF",
+    "textMuted": "rgba(255,255,255,.70)",
+    "accent": "#E4E4F5",
+    "accent2": "#C7B8FF"
+  },
+  "accentGradient": ["#E4E4F5", "#8E8EAF"],
+  "fonts": {
+    "display": "syne",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "sans",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 40,
+    "glass": true,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": -0.01,
+    "displayWeight": 800,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.02,
+    "vignette": 0.2,
+    "pattern": null
+  },
+  "legibility": "pill",
+  "chart": {
+    "zones": "chrome",
+    "zoneColors": ["#8E8EAF", "#B4B4D0", "#DADAF0", "#C7B8FF", "#FF7AD9"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "spring",
+    "speed": 1.15,
+    "entrance": "scaleIn",
+    "loop": null
+  },
+  "accentIsText": true
+}

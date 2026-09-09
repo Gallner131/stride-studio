@@ -1,0 +1,53 @@
+{
+  "id": "flare",
+  "name": "Flare",
+  "family": "loud",
+  "colors": {
+    "bg": "#0D0B1A",
+    "surface": "rgba(255,255,255,.10)",
+    "text": "#FFFFFF",
+    "textMuted": "rgba(255,255,255,.70)",
+    "accent": "#FF2D95",
+    "accent2": "#2A5BFF"
+  },
+  "fonts": {
+    "display": "syne",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "sans",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 28,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.08,
+    "displayWeight": 800,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.06,
+    "vignette": 0.35,
+    "pattern": null
+  },
+  "legibility": "shadow",
+  "chart": {
+    "zones": "neon",
+    "zoneColors": ["#6C63FF", "#00E5FF", "#39FF14", "#FFD300", "#FF2D95"]
+  },
+  "photo": {
+    "suits": ["night", "city"]
+  },
+  "motion": {
+    "ease": "spring",
+    "speed": 1.2,
+    "entrance": "scaleIn",
+    "loop": "pulse"
+  }
+}

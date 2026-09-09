@@ -197,3 +197,15 @@ fieldset.ins-row { border: 0; margin: 0; padding: 0; }
 fieldset.field { border: 0; margin: 0; padding: 0; }
 .tile.disabled, .tile:disabled { opacity: 0.45; }
 .tile.disabled em, .tile:disabled em { color: #ffb347; }
+
+/* ---------- Look picker ---------- */
+.lookstrip { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-bottom: 4px; }
+.lookcard {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 10px; border: 2px solid #2a2a2c; border-radius: 12px; min-height: 96px; overflow: hidden;
+}
+.lookcard.on { border-color: #d8ff3a; }
+.lookcard-sample { font-size: 26px; line-height: 1; }
+.lookcard-swatches { display: flex; gap: 3px; }
+.lookcard-swatches i { width: 14px; height: 14px; border-radius: 4px; display: block; }
+.lookcard-name { font-size: 11px; opacity: 0.75; }

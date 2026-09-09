@@ -1,0 +1,53 @@
+{
+  "id": "dashboard",
+  "name": "Dashboard",
+  "family": "data",
+  "colors": {
+    "bg": "#0F1720",
+    "surface": "rgba(255,255,255,.06)",
+    "text": "#E6EDF3",
+    "textMuted": "rgba(230,237,243,.60)",
+    "accent": "#3DDC97",
+    "accent2": "#FFB020"
+  },
+  "fonts": {
+    "display": "inter",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "sans",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 18,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": -0.01,
+    "displayWeight": 700,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0,
+    "vignette": 0.2,
+    "pattern": null
+  },
+  "legibility": "pill",
+  "chart": {
+    "zones": "default",
+    "zoneColors": ["#8FA3B5", "#4FC1E9", "#7BE495", "#FFB347", "#FF5A5F"]
+  },
+  "photo": {
+    "suits": ["any"]
+  },
+  "motion": {
+    "ease": "outCubic",
+    "speed": 1,
+    "entrance": "slideUp",
+    "loop": null
+  }
+}

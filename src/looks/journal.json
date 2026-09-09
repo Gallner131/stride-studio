@@ -1,0 +1,54 @@
+{
+  "id": "journal",
+  "name": "Journal",
+  "family": "editorial",
+  "colors": {
+    "bg": "#FAF7F1",
+    "surface": "rgba(0,0,0,.04)",
+    "text": "#262220",
+    "textMuted": "rgba(38,34,32,.60)",
+    "accent": "#262220",
+    "accent2": "#8A6E4B"
+  },
+  "fonts": {
+    "display": "instrument",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "serif",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 2,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": 0.01,
+    "displayWeight": 400,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.1,
+    "vignette": 0.05,
+    "pattern": null
+  },
+  "legibility": "scrim",
+  "chart": {
+    "zones": "sage",
+    "zoneColors": ["#B8C4B0", "#93A98C", "#7A9A7E", "#C9A27A", "#B5674D"]
+  },
+  "photo": {
+    "suits": ["soft", "indoor"]
+  },
+  "motion": {
+    "ease": "linear",
+    "speed": 0.8,
+    "entrance": "fadeIn",
+    "loop": null
+  },
+  "accentIsText": true
+}

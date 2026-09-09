@@ -1,0 +1,54 @@
+{
+  "id": "telemetry",
+  "name": "Telemetry",
+  "family": "data",
+  "colors": {
+    "bg": "#050806",
+    "surface": "rgba(57,255,20,.08)",
+    "text": "#39FF14",
+    "textMuted": "rgba(57,255,20,.60)",
+    "accent": "#39FF14",
+    "accent2": "#B6FF9E"
+  },
+  "fonts": {
+    "display": "jetbrains",
+    "body": "jetbrains",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "mono",
+    "body": "mono"
+  },
+  "shape": {
+    "radius": 2,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.04,
+    "displayWeight": 700,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.12,
+    "vignette": 0.5,
+    "pattern": "scanlines"
+  },
+  "legibility": "scrim",
+  "chart": {
+    "zones": "greens",
+    "zoneColors": ["#0F3D1A", "#1E6B2C", "#2FA845", "#39FF14", "#B6FF9E"]
+  },
+  "photo": {
+    "suits": ["dark", "night"]
+  },
+  "motion": {
+    "ease": "linear",
+    "speed": 1,
+    "entrance": "typewriter",
+    "loop": null
+  },
+  "accentIsText": true
+}

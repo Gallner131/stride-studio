@@ -10,6 +10,7 @@ import { animAt, STATIC_ANIM } from "./anim";
 import type { RenderEnv } from "./layers";
 import { renderLayer } from "./layers";
 import { placeLayer } from "./layout";
+import { applyLookType, type Look, resolveLayer } from "./tokens";
 
 export interface DocRenderOptions {
   /** Seconds since animation start. Pass Infinity for a final frame. */
@@ -19,6 +20,8 @@ export interface DocRenderOptions {
   asset: (assetId: string) => CanvasImageSource | null;
   hyrox?: RenderEnv["hyrox"];
   series?: RenderEnv["series"];
+  /** Resolves "$accent" and friends. Null renders literals only. §4.5 */
+  look?: Look | null;
   reducedMotion?: boolean;
   /** Layer currently being edited inline — drawn by the DOM textarea instead. §6.6 */
   hideLayerId?: string | null;
@@ -29,14 +32,28 @@ export interface DocRenderOptions {
  * The caller owns the background and any legacy template pass.
  */
 export function renderLayers(ctx: CanvasRenderingContext2D, doc: Document, options: DocRenderOptions): void {
-  const { t, mode, fields, asset, hyrox = null, series, reducedMotion = false, hideLayerId = null } = options;
+  const {
+    t,
+    mode,
+    fields,
+    asset,
+    hyrox = null,
+    series,
+    look = null,
+    reducedMotion = false,
+    hideLayerId = null,
+  } = options;
   const isThumb = mode === "thumb";
   const time = isThumb ? Number.POSITIVE_INFINITY : t;
 
-  doc.layers.forEach((layer, index) => {
-    if (!layer.visible) return;
-    if (layer.id === hideLayerId) return;
-    if (mode === "sticker" && !layer.sticker) return;
+  doc.layers.forEach((raw, index) => {
+    if (!raw.visible) return;
+    if (raw.id === hideLayerId) return;
+    if (mode === "sticker" && !raw.sticker) return;
+
+    // Tokens resolve here, per frame, so swapping the look restyles every layer at once
+    // while literal values the user picked survive untouched (§4.3).
+    const layer = applyLookType(resolveLayer(raw, look), look);
 
     const anim = isThumb || reducedMotion ? STATIC_ANIM : animAt(layer, index, time);
     const env: RenderEnv = { ctx, fields, asset, anim, hyrox, series };

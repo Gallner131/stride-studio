@@ -1,0 +1,53 @@
+{
+  "id": "volt",
+  "name": "Volt",
+  "family": "loud",
+  "colors": {
+    "bg": "#0E0E0E",
+    "surface": "rgba(255,255,255,.08)",
+    "text": "#F5F5F5",
+    "textMuted": "rgba(245,245,245,.66)",
+    "accent": "#D8FF3A",
+    "accent2": "#FFFFFF"
+  },
+  "fonts": {
+    "display": "bebas",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "cond",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 8,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.02,
+    "displayWeight": 400,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.08,
+    "vignette": 0.35,
+    "pattern": null
+  },
+  "legibility": "shadow",
+  "chart": {
+    "zones": "default",
+    "zoneColors": ["#8FA3B5", "#4FC1E9", "#7BE495", "#FFB347", "#FF5A5F"]
+  },
+  "photo": {
+    "suits": ["dark", "night"]
+  },
+  "motion": {
+    "ease": "spring",
+    "speed": 1.2,
+    "entrance": "slideUp",
+    "loop": "pulse"
+  }
+}

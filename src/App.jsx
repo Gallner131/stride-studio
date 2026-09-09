@@ -11,6 +11,8 @@ import { AddMenu } from "./ui/AddMenu.tsx";
 import { LayersPanel } from "./ui/LayersPanel.tsx";
 import { HyroxPanel } from "./ui/HyroxPanel.tsx";
 import { TemplateGallery } from "./ui/TemplateGallery.tsx";
+import { LookPicker } from "./ui/LookPicker.tsx";
+import { getLook, DEFAULT_LOOK_ID } from "./looks/index.ts";
 import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
@@ -145,6 +147,8 @@ export default function App() {
   const canRedo = temporal.futureStates.length > 0;
 
   const [hyrox, setHyrox] = useState(null);
+  const [lookId, setLookId] = useState(DEFAULT_LOOK_ID);
+  const look = useMemo(() => getLook(lookId), [lookId]);
 
   // A HYROX result drives both the legacy activity (so existing templates work) and the
   // extra {hyroxTotal}, {roxzone}, {station.*} bindings.
@@ -199,13 +203,26 @@ export default function App() {
 
   const canvasRef = useRef(null);
   const stateRef = useRef({});
-  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series };
+  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look };
   const startRef = useRef(performance.now());
   useEffect(() => { startRef.current = performance.now(); }, [template, animKey, act, format]);
   useEffect(() => { setFormat(format); }, [format]);
 
   // The legacy state (template, format, opts, units) is still the source of truth for the
   // template pass, so mirror it into the document. Phase 2 inverts this.
+  // A look owns colour and texture for the document layers; mirror the key tokens into the
+  // legacy opts so the template pass underneath does not fight it.
+  useEffect(() => {
+    if (!look) return;
+    setOpts((o) => ({
+      ...o,
+      accent: look.colors.accent.startsWith("#") ? look.colors.accent : o.accent,
+      grain: look.texture.grain,
+      vignette: look.texture.vignette,
+      uppercase: look.type.uppercase,
+    }));
+  }, [look]);
+
   useEffect(() => {
     patchDoc((d) => {
       d.templateId = template;
@@ -213,8 +230,9 @@ export default function App() {
       d.opts = opts;
       d.units = opts.units === "mi" ? "mi" : "km";
       d.prefs.safeZones = safeZones;
+      d.lookId = lookId;
     });
-  }, [template, format, opts, safeZones, patchDoc]);
+  }, [template, format, opts, safeZones, lookId, patchDoc]);
 
   // §13 Phase 1 step 5: the single tagline field becomes a real text layer.
   useEffect(() => {
@@ -240,7 +258,7 @@ export default function App() {
       cx.scale(k, k);
       try { renderFrame(cx, media, act, template, { ...opts, animate: false }, 1, 1); } catch {}
       cx.save(); cx.scale(W / 1000, W / 1000);
-      try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver, hyrox, series }); } catch {}
+      try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver, hyrox, series, look }); } catch {}
       cx.restore();
       const res = await saveDoc({ ...doc, thumb: c.toDataURL("image/jpeg", 0.6) });
       if (!res.ok && res.reason) setStorageNote(res.reason);
@@ -295,6 +313,7 @@ export default function App() {
         asset: st.assetResolver,
         hyrox: st.hyrox,
         series: st.series,
+        look: st.look,
         hideLayerId: st.editingTextId,
       });
       ctx.restore();
@@ -306,7 +325,7 @@ export default function App() {
     const loop = () => { if (!alive) return; draw(); raf = requestAnimationFrame(loop); };
     if (media?.type === "video" || opts.animate) loop(); else draw();
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series]);
+  }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look]);
 
   // OAuth redirect (?code=...)
   useEffect(() => {
@@ -417,7 +436,7 @@ export default function App() {
     if (doc.layers.length) {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
-      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox, series });
+      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox, series, look });
       ctx.restore();
     }
   };
@@ -466,14 +485,14 @@ export default function App() {
         await new Promise((res) => { const h = () => { v.removeEventListener("seeked", h); res(); }; v.addEventListener("seeked", h); setTimeout(res, 800); });
         out = await record((ctx) => {
           renderFrame(ctx, media, act, template, opts, v.duration ? v.currentTime / v.duration : 0, Math.min(1, v.currentTime / ANIM_SECONDS));
-          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: v.currentTime, mode: "full", fields, asset: assetResolver, hyrox, series }); ctx.restore(); }
+          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: v.currentTime, mode: "full", fields, asset: assetResolver, hyrox, series, look }); ctx.restore(); }
         }, (v.duration || 5) * 1000, v);
         v.loop = true; v.play().catch(() => {});
       } else {
         const dur = (ANIM_SECONDS + 1.5) * 1000;
         out = await record((ctx, el) => {
           renderFrame(ctx, media, act, template, { ...opts, animate: true }, 1, Math.min(1, el / 1000 / ANIM_SECONDS));
-          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: el / 1000, mode: "full", fields, asset: assetResolver, hyrox, series }); ctx.restore(); }
+          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: el / 1000, mode: "full", fields, asset: assetResolver, hyrox, series, look }); ctx.restore(); }
         }, dur, null);
       }
       setResult({ url: URL.createObjectURL(out.blob), blob: out.blob, kind: "video", ext: out.ext, mode: "full" });
@@ -586,8 +605,9 @@ export default function App() {
 
           {tab === "look" && selection.length === 0 && (
             <div className="stack">
+              <LookPicker lookId={lookId} onPick={(id) => { setLookId(id); say(`${getLook(id)?.name} applied`); }} />
               <div>
-                <div className="muted small label">Accent</div>
+                <div className="muted small label">Accent (legacy templates)</div>
                 <div className="swatches">
                   {PALETTE.map((p) => <button key={p.c} type="button" title={p.name} aria-label={p.name} className={`swatch ${opts.accent === p.c ? "on" : ""}`} style={{ background: p.c }} onClick={() => set("accent", p.c)} />)}
                   <label className="swatch custom" title="Custom colour">+<input type="color" value={/^#[0-9A-F]{6}$/i.test(opts.accent) ? opts.accent : "#ffffff"} onChange={(e) => set("accent", e.target.value.toUpperCase())} /></label>

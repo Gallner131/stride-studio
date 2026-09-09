@@ -1,0 +1,54 @@
+{
+  "id": "ember",
+  "name": "Ember",
+  "family": "loud",
+  "colors": {
+    "bg": "#0F0A08",
+    "surface": "rgba(255,255,255,.08)",
+    "text": "#FFF4EC",
+    "textMuted": "rgba(255,244,236,.70)",
+    "accent": "#FF7A18",
+    "accent2": "#FFD166"
+  },
+  "accentGradient": ["#FF7A18", "#FF2A2A"],
+  "fonts": {
+    "display": "archivo",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "cond",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 12,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.02,
+    "displayWeight": 400,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.1,
+    "vignette": 0.4,
+    "pattern": null
+  },
+  "legibility": "scrim",
+  "chart": {
+    "zones": "warm",
+    "zoneColors": ["#C9B79C", "#E0A458", "#E8461E", "#B8462E", "#6B1D12"]
+  },
+  "photo": {
+    "suits": ["sunset", "dark"]
+  },
+  "motion": {
+    "ease": "outExpo",
+    "speed": 1.1,
+    "entrance": "slideUp",
+    "loop": null
+  }
+}

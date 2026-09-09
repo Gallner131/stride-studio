@@ -1,0 +1,54 @@
+{
+  "id": "shade",
+  "name": "Shade",
+  "family": "quiet",
+  "colors": {
+    "bg": "#F2F2F2",
+    "surface": "rgba(0,0,0,.06)",
+    "text": "#0B0B0B",
+    "textMuted": "rgba(11,11,11,.60)",
+    "accent": "#0B0B0B",
+    "accent2": "#FFFFFF"
+  },
+  "fonts": {
+    "display": "inter",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "sans",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 16,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": false,
+    "letterSpacing": -0.02,
+    "displayWeight": 800,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0,
+    "vignette": 0,
+    "pattern": null
+  },
+  "legibility": "scrim",
+  "chart": {
+    "zones": "default",
+    "zoneColors": ["#8FA3B5", "#4FC1E9", "#7BE495", "#FFB347", "#FF5A5F"]
+  },
+  "photo": {
+    "suits": ["bright", "snow", "sky"]
+  },
+  "motion": {
+    "ease": "outCubic",
+    "speed": 1,
+    "entrance": "slideUp",
+    "loop": null
+  },
+  "accentIsText": true
+}

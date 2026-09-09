@@ -1,0 +1,53 @@
+{
+  "id": "neon",
+  "name": "Neon",
+  "family": "fun",
+  "colors": {
+    "bg": "#0A0614",
+    "surface": "rgba(255,45,149,.12)",
+    "text": "#FFFFFF",
+    "textMuted": "rgba(255,255,255,.70)",
+    "accent": "#FF2D95",
+    "accent2": "#5AC8FA"
+  },
+  "fonts": {
+    "display": "monoton",
+    "body": "inter",
+    "mono": "jetbrains"
+  },
+  "legacyFonts": {
+    "display": "cond",
+    "body": "sans"
+  },
+  "shape": {
+    "radius": 12,
+    "glass": false,
+    "stroke": 3,
+    "pad": 24
+  },
+  "type": {
+    "uppercase": true,
+    "letterSpacing": 0.06,
+    "displayWeight": 400,
+    "tabular": true
+  },
+  "texture": {
+    "grain": 0.1,
+    "vignette": 0.45,
+    "pattern": null
+  },
+  "legibility": "shadow",
+  "chart": {
+    "zones": "neon",
+    "zoneColors": ["#6C63FF", "#00E5FF", "#39FF14", "#FFD300", "#FF2D95"]
+  },
+  "photo": {
+    "suits": ["night"]
+  },
+  "motion": {
+    "ease": "spring",
+    "speed": 1.2,
+    "entrance": "scaleIn",
+    "loop": "flicker"
+  }
+}
