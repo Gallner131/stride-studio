@@ -19,6 +19,7 @@ import { measureLayer } from "./engine/layers.ts";
 import { AlignBar } from "./ui/AlignBar.tsx";
 import { getLook, DEFAULT_LOOK_ID } from "./looks/index.ts";
 import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
+import { importedToActivity, parseTrackFile } from "./data/gpx.ts";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer, newTextLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
@@ -144,6 +145,7 @@ export default function App() {
   const setStoreDoc = useEditor((st) => st.setDoc);
   const [designs, setDesigns] = useState([]);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [importNotes, setImportNotes] = useState([]);
   const [storageNote, setStorageNote] = useState("");
 
   // Undo/redo comes from zundo's temporal store (§6.1).
@@ -429,6 +431,29 @@ export default function App() {
       img.src = url;
     } else setError("Please choose a photo or a video file.");
     e.target.value = "";
+  };
+
+  // ---- file import (§7.3) ----
+  const onTrackFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    setImportNotes([]);
+    try {
+      const text = await file.text();
+      const imported = parseTrackFile(text, file.name);
+      if (!imported) {
+        setError(`Could not read ${file.name}. GPX and TCX files are supported; FIT is not yet.`);
+        return;
+      }
+      setAct(importedToActivity(imported));
+      setHyrox(null);
+      setImportNotes(imported.problems);
+      say(`${imported.name} imported`);
+    } catch (err) {
+      setError(`Could not read that file: ${err.message}`);
+    }
   };
 
   // ---- Strava ----
@@ -783,10 +808,27 @@ export default function App() {
                   <button type="button" className="link" onClick={() => setShowManual((s) => !s)} data-testid="edit-stats">{showManual ? "Done" : "Edit"}</button>
                 </div>
                 {showManual && <ManualForm key={act.id} act={act} onChange={setAct} />}
+                {importNotes.length > 0 && (
+                  <ul className="hyrox-problems" data-testid="import-notes">
+                    {importNotes.map((n) => (
+                      <li key={n} className="small">{n}</li>
+                    ))}
+                  </ul>
+                )}
                 <div className="chips" style={{ marginTop: 12 }}>
                   <Chip on={act.id === "demo"} onClick={() => setAct(DEMO)}>Demo run</Chip>
                   <Chip on={act.id === "demo-workout"} onClick={() => setAct(DEMO_WORKOUT)} testid="demo-workout">Demo workout</Chip>
                   <Chip onClick={() => setShowStrava(true)}>From Strava</Chip>
+                  <label className="chip" data-testid="import-chip">
+                    Import a file
+                    <input
+                      type="file"
+                      accept=".gpx,.tcx,application/gpx+xml"
+                      onChange={onTrackFile}
+                      data-testid="track-input"
+                      style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
+                    />
+                  </label>
                 </div>
               </div>
               <div><div className="muted small label">Units</div><Seg value={opts.units} options={[["km", "Kilometres"], ["mi", "Miles"]]} onChange={(v) => set("units", v)} /></div>
