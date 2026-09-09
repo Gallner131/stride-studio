@@ -14,9 +14,12 @@ import { TemplateGallery } from "./ui/TemplateGallery.tsx";
 import { LookPicker } from "./ui/LookPicker.tsx";
 import { Suggestions } from "./ui/Suggestions.tsx";
 import { analysePhoto } from "./engine/photo.ts";
+import { handleShortcut, SHORTCUTS } from "./editor/shortcuts.ts";
+import { measureLayer } from "./engine/layers.ts";
+import { AlignBar } from "./ui/AlignBar.tsx";
 import { getLook, DEFAULT_LOOK_ID } from "./looks/index.ts";
 import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
-import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer } from "./model/defaults.ts";
+import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer, newTextLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
   W, H, FORMATS, setFormat, ANIM_SECONDS, DEMO, DEMO_WORKOUT, SPORTS, sportFromStrava, CATEGORIES, TEMPLATES, PALETTE, FILTERS, FONTS, BACKGROUNDS, DEFAULT_OPTS,
@@ -133,12 +136,14 @@ export default function App() {
   const editorMode = useEditor((st) => st.mode);
   const safeZones = useEditor((st) => st.safeZones);
   const setEditorMode = useEditor((st) => st.setMode);
+  const storeSetFormat = useEditor((st) => st.setFormat);
   const toggleSafeZones = useEditor((st) => st.toggleSafeZones);
   const clearSelection = useEditor((st) => st.clearSelection);
   const addLayer = useEditor((st) => st.addLayer);
   const patchDoc = useEditor((st) => st.patchDoc);
   const setStoreDoc = useEditor((st) => st.setDoc);
   const [designs, setDesigns] = useState([]);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [storageNote, setStorageNote] = useState("");
 
   // Undo/redo comes from zundo's temporal store (§6.1).
@@ -215,12 +220,34 @@ export default function App() {
 
   const assetResolver = useCallback((id) => (id === "photo" && media?.type === "image" ? media.el : null), [media]);
 
+  // Align, distribute and format reflow all need to know how big a layer actually is, and
+  // must agree with the renderer — so they share its measurement.
+  const measureRef2 = useRef(null);
+  const measure = useCallback(
+    (layer) => {
+      if (!measureRef2.current) {
+        const c = document.createElement("canvas");
+        c.width = 8; c.height = 8;
+        measureRef2.current = c.getContext("2d");
+      }
+      const env = { ctx: measureRef2.current, fields, asset: assetResolver, anim: { opacity: 1, dx: 0, dy: 0, scale: 1, progress: 1 }, hyrox, series };
+      try { return measureLayer(layer, env); } catch { return { w: 200, h: 100 }; }
+    },
+    [fields, assetResolver, hyrox, series],
+  );
+
   const canvasRef = useRef(null);
   const stateRef = useRef({});
   stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look };
   const startRef = useRef(performance.now());
   useEffect(() => { startRef.current = performance.now(); }, [template, animKey, act, format]);
   useEffect(() => { setFormat(format); }, [format]);
+
+  // §4.9: switching format keeps anchors and only nudges what would fall outside the new
+  // safe zone or canvas width.
+  useEffect(() => {
+    storeSetFormat(format, measure);
+  }, [format]);
 
   // The legacy state (template, format, opts, units) is still the source of truth for the
   // template pass, so mirror it into the document. Phase 2 inverts this.
@@ -240,7 +267,6 @@ export default function App() {
   useEffect(() => {
     patchDoc((d) => {
       d.templateId = template;
-      d.format = format;
       d.opts = opts;
       d.units = opts.units === "mi" ? "mi" : "km";
       d.prefs.safeZones = safeZones;
@@ -260,6 +286,26 @@ export default function App() {
   }, [opts.tagline]);
 
   const say = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2200); };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      handleShortcut(e, {
+        store: () => useEditor.getState(),
+        measure,
+        undo: () => useEditor.temporal.getState().undo(),
+        redo: () => useEditor.temporal.getState().redo(),
+        onExportImage: () => exportImage("full"),
+        onAddText: () => { const l = newTextLayer(); addLayer(l); setTab("style"); },
+        onAddStat: () => { addLayer(newStatLayer("distance")); setTab("style"); },
+        onAddRoute: () => { addLayer(newRouteLayer()); setTab("style"); },
+        onToggleShortcutHelp: () => setShowShortcuts((v) => !v),
+        onFit: () => {},
+        onZoom: () => {},
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Autosave 500 ms after the last change, so a Safari reload never costs work (§1.1 A8, §8).
   useEffect(() => {
@@ -573,7 +619,9 @@ export default function App() {
             <button type="button" className="btn" onClick={() => redo()} disabled={!canRedo} title="Redo" data-testid="redo">↷</button>
             <button type="button" className={`btn ${safeZones ? "on" : ""}`} onClick={toggleSafeZones} title="Instagram safe zones" data-testid="safe-zones">Safe zones</button>
             {selection.length > 0 && (
-              <button type="button" className="btn" onClick={clearSelection} data-testid="deselect">Deselect</button>
+              <button type="button" className="btn" onClick={clearSelection} data-testid="deselect">
+                Deselect{selection.length > 1 ? ` (${selection.length})` : ""}
+              </button>
             )}
           </div>
           <div className="btnrow">
@@ -581,6 +629,7 @@ export default function App() {
             <button type="button" className="btn" onClick={shuffle}>Surprise me</button>
             <button type="button" className="btn strava" onClick={() => setShowStrava(true)}>{strava.connected ? "Strava" : "Connect Strava"}</button>
           </div>
+          {selection.length > 1 && <AlignBar measure={measure} />}
           {error && <div className="error" role="alert">{error}</div>}
         </section>
 
@@ -838,6 +887,18 @@ export default function App() {
             {canShareFiles ? "Share opens your phone's share sheet: pick Instagram, then Story or Post. " : "On a phone, press and hold the preview to save it to your camera roll. "}
             {result.mode === "sticker" ? "In Instagram, add it as a photo sticker on top of any Story." : "Caption is one tap away."}
           </p>
+        </Modal>
+      )}
+      {showShortcuts && (
+        <Modal title="Keyboard shortcuts" onClose={() => setShowShortcuts(false)}>
+          <ul className="shortcuts">
+            {SHORTCUTS.map((s2) => (
+              <li key={s2.keys}>
+                <kbd>{s2.keys}</kbd>
+                <span>{s2.action}</span>
+              </li>
+            ))}
+          </ul>
         </Modal>
       )}
       {toast && <div className="toast">{toast}</div>}

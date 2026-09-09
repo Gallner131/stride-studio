@@ -3,6 +3,7 @@ import { produce } from "immer";
 import { temporal } from "zundo";
 import { create } from "zustand";
 import { newDocument, placeNewLayer } from "../model/defaults";
+import { type AlignEdge, alignLayers, distributeLayers, type Measure, reflowLayers } from "../model/reflow";
 import type { Document, Layer, LayerType } from "../model/types";
 
 export type SheetId = "style" | "look" | "add" | "layers" | "inspector" | "data" | "text" | "adjust";
@@ -18,7 +19,11 @@ export interface EditorState {
   // --- document
   setDoc: (doc: Document) => void;
   patchDoc: (fn: (doc: Document) => void) => void;
-  setFormat: (format: Document["format"]) => void;
+  /** Reflows layers into the new format's safe zone and width (§4.9). */
+  setFormat: (format: Document["format"], measure?: Measure) => void;
+  align: (edge: AlignEdge, measure: Measure) => void;
+  distribute: (axis: "horizontal" | "vertical", measure: Measure) => void;
+  nudge: (dx: number, dy: number) => void;
   setTemplate: (templateId: string) => void;
   setOpts: (opts: Record<string, unknown>) => void;
 
@@ -37,6 +42,10 @@ export interface EditorState {
   select: (ids: string[]) => void;
   toggleSelect: (id: string) => void;
   clearSelection: () => void;
+  selectAll: () => void;
+  /** Duplicates every selected layer, and selects the copies. */
+  duplicateSelection: () => void;
+  deleteSelection: () => void;
 
   // --- ui
   setMode: (mode: "quick" | "studio") => void;
@@ -67,10 +76,42 @@ export const useEditor = create<EditorState>()(
           }),
         })),
 
-      setFormat: (format) =>
+      setFormat: (format, measure) =>
         set((s) => ({
           doc: produce(s.doc, (d) => {
+            if (measure && d.format !== format) {
+              // Anchors hold; only safe-zone violations and over-wide layers are adjusted.
+              d.layers = reflowLayers(d.layers, d.format, format, measure).layers;
+            }
             d.format = format;
+            touch(d);
+          }),
+        })),
+
+      align: (edge, measure) =>
+        set((s) => ({
+          doc: produce(s.doc, (d) => {
+            d.layers = alignLayers(d.layers, s.selection, edge, measure, d.format);
+            touch(d);
+          }),
+        })),
+
+      distribute: (axis, measure) =>
+        set((s) => ({
+          doc: produce(s.doc, (d) => {
+            d.layers = distributeLayers(d.layers, s.selection, axis, measure, d.format);
+            touch(d);
+          }),
+        })),
+
+      nudge: (dx, dy) =>
+        set((s) => ({
+          doc: produce(s.doc, (d) => {
+            for (const layer of d.layers) {
+              if (!s.selection.includes(layer.id) || layer.locked) continue;
+              layer.offset.dx += dx;
+              layer.offset.dy += dy;
+            }
             touch(d);
           }),
         })),
@@ -169,6 +210,44 @@ export const useEditor = create<EditorState>()(
           selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id],
         })),
       clearSelection: () => set({ selection: [], editingTextId: null }),
+
+      selectAll: () =>
+        set((s) => ({
+          selection: s.doc.layers.filter((l) => l.visible && !l.locked).map((l) => l.id),
+          mode: "studio",
+        })),
+
+      duplicateSelection: () => {
+        const { doc, selection } = get();
+        const copies: Layer[] = [];
+        for (const id of selection) {
+          const source = doc.layers.find((l) => l.id === id);
+          if (!source) continue;
+          const copy = JSON.parse(JSON.stringify(source)) as Layer;
+          copy.id = `ly_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+          copy.name = `${source.name} copy`;
+          copy.offset = { dx: source.offset.dx + 24, dy: source.offset.dy + 24 };
+          copies.push(copy);
+        }
+        if (copies.length === 0) return;
+        set((s) => ({
+          doc: produce(s.doc, (d) => {
+            d.layers.push(...copies);
+            touch(d);
+          }),
+          selection: copies.map((c) => c.id),
+        }));
+      },
+
+      deleteSelection: () =>
+        set((s) => ({
+          doc: produce(s.doc, (d) => {
+            d.layers = d.layers.filter((l) => !s.selection.includes(l.id) || l.locked);
+            touch(d);
+          }),
+          selection: [],
+          editingTextId: null,
+        })),
 
       setMode: (mode) => set({ mode }),
       setEditingText: (id) => set({ editingTextId: id }),

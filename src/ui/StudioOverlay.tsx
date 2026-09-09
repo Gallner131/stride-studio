@@ -49,6 +49,7 @@ export function StudioOverlay({
   const safeZones = useEditor((s) => s.safeZones);
   const editingTextId = useEditor((s) => s.editingTextId);
   const select = useEditor((s) => s.select);
+  const toggleSelect = useEditor((s) => s.toggleSelect);
   const clearSelection = useEditor((s) => s.clearSelection);
   const patchLayer = useEditor((s) => s.patchLayer);
   const setMode = useEditor((s) => s.setMode);
@@ -146,7 +147,9 @@ export function StudioOverlay({
     lastTapRef.current = { t: now, id: tappedId };
 
     if (result.select) {
-      select([result.select]);
+      // Shift or meta adds to the selection; a plain tap replaces it (§6.2).
+      if (e.shiftKey || e.metaKey || e.ctrlKey) toggleSelect(result.select);
+      else if (!selection.includes(result.select)) select([result.select]);
       setMode("studio");
     }
     if (result.drag) {
@@ -177,6 +180,20 @@ export function StudioOverlay({
 
     drag.moved = true;
     setGuides(update.guides);
+
+    // With several layers selected, a move applies the same delta to all of them, so a
+    // group of elements keeps its internal spacing.
+    if (drag.kind === "move" && update.offset && selection.length > 1) {
+      const deltaX = update.offset.dx - layer.offset.dx;
+      const deltaY = update.offset.dy - layer.offset.dy;
+      for (const id of selection) {
+        patchLayer(id, (l) => {
+          if (l.locked) return;
+          l.offset = { dx: Math.round(l.offset.dx + deltaX), dy: Math.round(l.offset.dy + deltaY) };
+        });
+      }
+      return;
+    }
 
     patchLayer(layer.id, (l) => {
       if (update.offset) l.offset = update.offset;
