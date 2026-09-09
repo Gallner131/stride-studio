@@ -1,4 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useStore } from "zustand";
+import { useEditor } from "./editor/store.ts";
+import { renderLayers } from "./engine/render.ts";
+import { unionBounds, layoutDoc } from "./engine/layout.ts";
+import { buildFields } from "./model/fields.ts";
+import { taglineToLayer } from "./model/migrate.ts";
+import { StudioOverlay } from "./ui/StudioOverlay.tsx";
+import { Inspector } from "./ui/Inspector.tsx";
+import { AddMenu } from "./ui/AddMenu.tsx";
+import { LayersPanel } from "./ui/LayersPanel.tsx";
+import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
   W, H, FORMATS, setFormat, ANIM_SECONDS, DEMO, DEMO_WORKOUT, SPORTS, sportFromStrava, CATEGORIES, TEMPLATES, PALETTE, FILTERS, FONTS, BACKGROUNDS, DEFAULT_OPTS,
   renderFrame, captionFor, fmtTime, fmtPace, fmtDate, fmtDist, decodePolyline, derive,
@@ -106,14 +117,101 @@ export default function App() {
   const [activities, setActivities] = useState([]);
   const [status, setStatus] = useState("");
 
+  // --- document model (Phase 1). The legacy template still draws underneath; doc.layers
+  // are the addressable elements on top (spec §13 Phase 1 step 2).
+  const doc = useEditor((st) => st.doc);
+  const selection = useEditor((st) => st.selection);
+  const editingTextId = useEditor((st) => st.editingTextId);
+  const editorMode = useEditor((st) => st.mode);
+  const safeZones = useEditor((st) => st.safeZones);
+  const setEditorMode = useEditor((st) => st.setMode);
+  const toggleSafeZones = useEditor((st) => st.toggleSafeZones);
+  const clearSelection = useEditor((st) => st.clearSelection);
+  const addLayer = useEditor((st) => st.addLayer);
+  const patchDoc = useEditor((st) => st.patchDoc);
+  const setStoreDoc = useEditor((st) => st.setDoc);
+  const [designs, setDesigns] = useState([]);
+  const [storageNote, setStorageNote] = useState("");
+
+  // Undo/redo comes from zundo's temporal store (§6.1).
+  const temporal = useStore(useEditor.temporal, (st) => st);
+  const undo = () => useEditor.temporal.getState().undo();
+  const redo = () => useEditor.temporal.getState().redo();
+  const canUndo = temporal.pastStates.length > 0;
+  const canRedo = temporal.futureStates.length > 0;
+
+  const fields = useMemo(() => buildFields(act, opts), [act, opts]);
+  const assetResolver = useCallback((id) => (id === "photo" && media?.type === "image" ? media.el : null), [media]);
+
   const canvasRef = useRef(null);
   const stateRef = useRef({});
-  stateRef.current = { media, act, template, opts, format };
+  stateRef.current = { media, act, template, opts, format, doc, fields, assetResolver, editingTextId };
   const startRef = useRef(performance.now());
   useEffect(() => { startRef.current = performance.now(); }, [template, animKey, act, format]);
   useEffect(() => { setFormat(format); }, [format]);
 
+  // The legacy state (template, format, opts, units) is still the source of truth for the
+  // template pass, so mirror it into the document. Phase 2 inverts this.
+  useEffect(() => {
+    patchDoc((d) => {
+      d.templateId = template;
+      d.format = format;
+      d.opts = opts;
+      d.units = opts.units === "mi" ? "mi" : "km";
+      d.prefs.safeZones = safeZones;
+    });
+  }, [template, format, opts, safeZones, patchDoc]);
+
+  // §13 Phase 1 step 5: the single tagline field becomes a real text layer.
+  useEffect(() => {
+    if (!opts.tagline) return;
+    const layer = taglineToLayer(opts);
+    if (layer) {
+      addLayer(layer);
+      setOpts((o) => ({ ...o, tagline: "" }));
+      say("Your line is now a text layer you can drag");
+    }
+  }, [opts.tagline]);
+
   const say = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2200); };
+
+  // Autosave 500 ms after the last change, so a Safari reload never costs work (§1.1 A8, §8).
+  useEffect(() => {
+    if (doc.layers.length === 0 && doc.name === "Untitled design") return;
+    const id = setTimeout(async () => {
+      const c = document.createElement("canvas");
+      c.width = 216; c.height = Math.round((FORMATS[format].h / FORMATS[format].w) * 216);
+      const k = 216 / FORMATS[format].w;
+      const cx = c.getContext("2d");
+      cx.scale(k, k);
+      try { renderFrame(cx, media, act, template, { ...opts, animate: false }, 1, 1); } catch {}
+      cx.save(); cx.scale(W / 1000, W / 1000);
+      try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver }); } catch {}
+      cx.restore();
+      const res = await saveDoc({ ...doc, thumb: c.toDataURL("image/jpeg", 0.6) });
+      if (!res.ok && res.reason) setStorageNote(res.reason);
+      else savePrefs({ lastDocId: doc.id });
+    }, 500);
+    return () => clearTimeout(id);
+  }, [doc, format, media, act, template, opts, fields, assetResolver]);
+
+  // Restore the last design on first load (§3.8 "Continue last design").
+  useEffect(() => {
+    (async () => {
+      const { lastDocId } = loadPrefs();
+      if (!lastDocId) return;
+      const saved = await loadDoc(lastDocId);
+      if (saved && saved.layers.length > 0) {
+        setStoreDoc(saved);
+        setTemplate(saved.templateId || "sticker");
+        setFmt(saved.format || "story");
+        if (saved.opts && Object.keys(saved.opts).length) setOpts((o) => ({ ...o, ...saved.opts }));
+        say("Picked up where you left off");
+      }
+    })();
+  }, []);
+
+  const refreshDesigns = useCallback(async () => { setDesigns(await listDocs()); }, []);
 
   const animT = () => {
     const el = (performance.now() - startRef.current) / 1000;
@@ -128,7 +226,23 @@ export default function App() {
     if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
     let progress = 1;
     if (media?.type === "video" && media.el.duration) progress = media.el.currentTime / media.el.duration;
-    renderFrame(c.getContext("2d"), media, act, template, opts, progress, opts.animate ? animT() : 1);
+    const ctx = c.getContext("2d");
+    renderFrame(ctx, media, act, template, opts, progress, opts.animate ? animT() : 1);
+
+    // Document layers, drawn on top in canvas units (1000 wide, §4.1).
+    const st = stateRef.current;
+    if (st.doc?.layers?.length) {
+      ctx.save();
+      ctx.scale(W / 1000, W / 1000);
+      renderLayers(ctx, st.doc, {
+        t: opts.animate ? animT() * 6 : Number.POSITIVE_INFINITY,
+        mode: "full",
+        fields: st.fields,
+        asset: st.assetResolver,
+        hideLayerId: st.editingTextId,
+      });
+      ctx.restore();
+    }
   }, []);
 
   useEffect(() => {
@@ -136,7 +250,7 @@ export default function App() {
     const loop = () => { if (!alive) return; draw(); raf = requestAnimationFrame(loop); };
     if (media?.type === "video" || opts.animate) loop(); else draw();
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [media, act, template, opts, format, draw]);
+  }, [media, act, template, opts, format, draw, doc, fields, editingTextId]);
 
   // OAuth redirect (?code=...)
   useEffect(() => {
@@ -242,10 +356,20 @@ export default function App() {
   const toBlob = (c, type) => new Promise((res) => c.toBlob(res, type));
   const fileName = (ext) => `${(act.name || "activity").replace(/[^\w-]+/g, "-").toLowerCase()}-${fmtDist(derive(act, opts).dist)}${opts.units}.${ext}`;
 
+  const drawFull = (ctx, mode, t = Number.POSITIVE_INFINITY) => {
+    renderFrame(ctx, media, act, template, opts, 1, 1, mode);
+    if (doc.layers.length) {
+      ctx.save();
+      ctx.scale(W / 1000, W / 1000);
+      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver });
+      ctx.restore();
+    }
+  };
+
   const exportImage = async (mode = "full") => {
     try {
       const c = mkCanvas();
-      renderFrame(c.getContext("2d"), media, act, template, opts, 1, 1, mode);
+      drawFull(c.getContext("2d"), mode);
       const blob = await toBlob(c, "image/png");
       if (!blob) throw new Error("canvas returned nothing");
       setResult({ url: URL.createObjectURL(blob), blob, kind: "image", ext: "png", mode });
@@ -284,11 +408,17 @@ export default function App() {
       if (v) {
         v.loop = false; v.pause(); v.currentTime = 0;
         await new Promise((res) => { const h = () => { v.removeEventListener("seeked", h); res(); }; v.addEventListener("seeked", h); setTimeout(res, 800); });
-        out = await record((ctx) => renderFrame(ctx, media, act, template, opts, v.duration ? v.currentTime / v.duration : 0, Math.min(1, v.currentTime / ANIM_SECONDS)), (v.duration || 5) * 1000, v);
+        out = await record((ctx) => {
+          renderFrame(ctx, media, act, template, opts, v.duration ? v.currentTime / v.duration : 0, Math.min(1, v.currentTime / ANIM_SECONDS));
+          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: v.currentTime, mode: "full", fields, asset: assetResolver }); ctx.restore(); }
+        }, (v.duration || 5) * 1000, v);
         v.loop = true; v.play().catch(() => {});
       } else {
         const dur = (ANIM_SECONDS + 1.5) * 1000;
-        out = await record((ctx, el) => renderFrame(ctx, media, act, template, { ...opts, animate: true }, 1, Math.min(1, el / 1000 / ANIM_SECONDS)), dur, null);
+        out = await record((ctx, el) => {
+          renderFrame(ctx, media, act, template, { ...opts, animate: true }, 1, Math.min(1, el / 1000 / ANIM_SECONDS));
+          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: el / 1000, mode: "full", fields, asset: assetResolver }); ctx.restore(); }
+        }, dur, null);
       }
       setResult({ url: URL.createObjectURL(out.blob), blob: out.blob, kind: "video", ext: out.ext, mode: "full" });
     } catch (e) { setError(`Video export failed: ${e.message}`); }
@@ -332,10 +462,14 @@ export default function App() {
             <Seg value={format} options={[["story", "9:16"], ["post", "4:5"], ["square", "1:1"]]} onChange={setFmt} />
           </div>
           <div className="stage" style={{ aspectRatio: `${FORMATS[format].w}/${FORMATS[format].h}` }}>
-            <canvas ref={canvasRef} width={W} height={H} data-testid="stage" style={{ touchAction: "none", cursor: "grab" }}
-              onPointerDown={(e) => { const r = e.currentTarget.getBoundingClientRect(); dragRef.current = { x: e.clientX, y: e.clientY, ox: opts.offsetX || 0, oy: opts.offsetY, k: W / r.width }; e.currentTarget.setPointerCapture(e.pointerId); }}
-              onPointerMove={(e) => { const dr = dragRef.current; if (!dr) return; const nx = Math.round(dr.ox + (e.clientX - dr.x) * dr.k), ny = Math.round(dr.oy + (e.clientY - dr.y) * dr.k); setOpts((o) => ({ ...o, offsetX: Math.max(-500, Math.min(500, nx)), offsetY: Math.max(-800, Math.min(800, ny)) })); }}
-              onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }} />
+            <canvas ref={canvasRef} width={W} height={H} data-testid="stage" />
+            <StudioOverlay
+              fields={fields}
+              asset={assetResolver}
+              onEmptyPointerDown={(e) => { const r = e.currentTarget.getBoundingClientRect(); dragRef.current = { x: e.clientX, y: e.clientY, ox: opts.offsetX || 0, oy: opts.offsetY, k: W / r.width }; e.currentTarget.setPointerCapture(e.pointerId); }}
+              onEmptyPointerMove={(e) => { const dr = dragRef.current; if (!dr) return; const nx = Math.round(dr.ox + (e.clientX - dr.x) * dr.k), ny = Math.round(dr.oy + (e.clientY - dr.y) * dr.k); setOpts((o) => ({ ...o, offsetX: Math.max(-500, Math.min(500, nx)), offsetY: Math.max(-800, Math.min(800, ny)) })); }}
+              onEmptyPointerUp={() => { dragRef.current = null; }}
+            />
             {!media && (
               <label className="dropzone">
                 <strong>Add a photo or video</strong>
@@ -344,6 +478,14 @@ export default function App() {
               </label>
             )}
             {media && opts.animate && <button type="button" className="replay" onClick={() => setAnimKey((k) => k + 1)} title="Replay animation">↻</button>}
+          </div>
+          <div className="btnrow toolbar">
+            <button type="button" className="btn" onClick={() => undo()} disabled={!canUndo} title="Undo" data-testid="undo">↶</button>
+            <button type="button" className="btn" onClick={() => redo()} disabled={!canRedo} title="Redo" data-testid="redo">↷</button>
+            <button type="button" className={`btn ${safeZones ? "on" : ""}`} onClick={toggleSafeZones} title="Instagram safe zones" data-testid="safe-zones">Safe zones</button>
+            {selection.length > 0 && (
+              <button type="button" className="btn" onClick={clearSelection} data-testid="deselect">Deselect</button>
+            )}
           </div>
           <div className="btnrow">
             <label className="btn">{media ? "Change media" : "Choose file"}<input type="file" accept="image/*,video/*" onChange={onFile} data-testid="file-input-2" /></label>
@@ -355,10 +497,17 @@ export default function App() {
 
         <section className="controls">
           <nav className="tabs">
-            {[["style", "Style"], ["look", "Look"], ["text", "Text"], ["stats", "Stats"], ["adjust", "Adjust"]].map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
+            {[["style", "Style"], ["add", "Add"], ["layers", "Layers"], ["look", "Look"], ["text", "Text"], ["stats", "Stats"], ["adjust", "Adjust"]].map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>{l}{k === "layers" && doc.layers.length > 0 ? ` (${doc.layers.length})` : ""}</button>)}
           </nav>
 
-          {tab === "style" && (
+          {selection.length > 0 && tab !== "layers" && tab !== "add" && (
+            <Inspector onDone={clearSelection} />
+          )}
+
+          {tab === "add" && <AddMenu onAdded={() => setTab("layers")} />}
+          {tab === "layers" && <LayersPanel onSelect={() => setTab("style")} />}
+
+          {tab === "style" && selection.length === 0 && (
             <>
               <div className="chips" style={{ marginBottom: 12 }}>{CATEGORIES.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}</div>
               <div className="gallery">
@@ -368,7 +517,7 @@ export default function App() {
             </>
           )}
 
-          {tab === "look" && (
+          {tab === "look" && selection.length === 0 && (
             <div className="stack">
               <div>
                 <div className="muted small label">Accent</div>
@@ -402,7 +551,7 @@ export default function App() {
             </div>
           )}
 
-          {tab === "text" && (
+          {tab === "text" && selection.length === 0 && (
             <div className="stack">
               <div>
                 <div className="muted small label">Big numbers</div>
@@ -421,12 +570,13 @@ export default function App() {
                 </div>
               </div>
               <div>
-                <div className="muted small label">Add a line of your own</div>
-                <input value={opts.tagline} onChange={(e) => set("tagline", e.target.value)} placeholder="e.g. First half marathon. Legs gone, heart full." maxLength={60} data-testid="tagline" className="wide" />
-                <div className="grid2" style={{ marginTop: 10 }}>
-                  <Seg value={opts.taglinePos} options={[["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]]} onChange={(v) => set("taglinePos", v)} />
-                  <Seg value={String(opts.taglineSize)} options={[["0.75", "S"], ["1", "M"], ["1.4", "L"]]} onChange={(v) => set("taglineSize", parseFloat(v))} />
-                </div>
+                <div className="muted small label">Your own words</div>
+                <p className="small" style={{ marginTop: 0 }}>
+                  Text is now a layer you can put anywhere, style on its own, and add as many of as you like.
+                </p>
+                <button type="button" className="btn primary" onClick={() => setTab("add")} data-testid="go-add-text">
+                  Add text
+                </button>
               </div>
               <div>
                 <div className="muted small label">Show</div>
@@ -440,7 +590,7 @@ export default function App() {
             </div>
           )}
 
-          {tab === "stats" && (
+          {tab === "stats" && selection.length === 0 && (
             <div className="stack">
               <div className="card">
                 <div className="row">
@@ -470,7 +620,7 @@ export default function App() {
             </div>
           )}
 
-          {tab === "adjust" && (
+          {tab === "adjust" && selection.length === 0 && (
             <div className="stack">
               <Slider label="Text size" value={opts.scale} min={0.7} max={1.35} step={0.05} onChange={(v) => set("scale", v)} fmt={(v) => `${Math.round(v * 100)}%`} />
               <p className="muted small" style={{ margin: 0 }}>Tip: drag directly on the preview to move the design.</p>

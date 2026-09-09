@@ -17,14 +17,17 @@ export async function openApp(page: Page): Promise<string[]> {
   return errors;
 }
 
+export type TabName = "Style" | "Add" | "Layers" | "Look" | "Text" | "Stats" | "Adjust";
+
 /**
- * Clicks one of the control tabs (Style / Look / Text / Stats / Adjust).
+ * Clicks one of the control tabs.
  *
- * Scoped to nav.tabs because several tab labels collide with other controls — "Stats" is
- * both a tab and a template category chip.
+ * Addressed by test id rather than label: tab labels collide with other controls ("Stats"
+ * is also a template category chip) and the Layers tab carries a live count, so no
+ * text-based selector is stable.
  */
-export async function tab(page: Page, name: "Style" | "Look" | "Text" | "Stats" | "Adjust"): Promise<void> {
-  await page.locator("nav.tabs").getByRole("button", { name, exact: true }).click();
+export async function tab(page: Page, name: TabName): Promise<void> {
+  await page.locator(`[data-testid='tab-${name.toLowerCase()}']`).click();
 }
 
 /** Attaches the fixture photo and waits for the image decode to reach the canvas. */

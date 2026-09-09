@@ -86,11 +86,20 @@ test("a workout with no distance promotes duration to the hero (§4.7)", async (
   expect(errors, errors.join("\n")).toEqual([]);
 });
 
-test("typing a custom line renders it into the design", async ({ page }) => {
+test("your own words are a text layer now, not a single field (§1.1 A3)", async ({ page }) => {
   await openApp(page);
   await tab(page, "Text");
+
+  // The old one-text-field control is gone; it points at the Add menu instead.
+  await expect(page.locator("[data-testid='tagline']")).toHaveCount(0);
   const before = await stageSnapshot(page);
 
-  await page.locator("[data-testid='tagline']").fill("New PB. Finally.");
+  await page.locator("[data-testid='go-add-text']").click();
+  await page.locator("[data-testid='add-text']").click();
+  const inline = page.locator("[data-testid='inline-text']");
+  await expect(inline).toBeVisible();
+  await inline.fill("New PB. Finally.");
+  await page.keyboard.press("Escape");
+
   await expect.poll(async () => (await stageSnapshot(page)) !== before, { timeout: 5000 }).toBe(true);
 });
