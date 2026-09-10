@@ -26,6 +26,10 @@ const json = (body: unknown, status: number, origin: string): Response =>
     },
   });
 
+// Web-standard Request/Response handler, so it runs on the edge runtime rather than the
+// Node one — the Node runtime expects (req, res) and cannot invoke this signature.
+export const config = { runtime: "edge" };
+
 export default async function handler(request: Request): Promise<Response> {
   const origin = request.headers.get("origin") ?? "";
   const allowed = ALLOWED_ORIGIN === "" ? origin === "" : origin === ALLOWED_ORIGIN;

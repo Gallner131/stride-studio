@@ -9,6 +9,10 @@
 
 const ALLOWED_ORIGIN = process.env.APP_ORIGIN ?? "";
 
+// Web-standard Request/Response handler, so it runs on the edge runtime rather than the
+// Node one — the Node runtime expects (req, res) and cannot invoke this signature.
+export const config = { runtime: "edge" };
+
 export default async function handler(request: Request): Promise<Response> {
   const origin = request.headers.get("origin") ?? "";
   const allowed = ALLOWED_ORIGIN === "" ? true : origin === "" || origin === ALLOWED_ORIGIN;
