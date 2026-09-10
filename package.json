@@ -12,6 +12,7 @@
     "lint:looks": "node scripts/lint-looks.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretest:e2e": "npm run build",
     "test:e2e": "playwright test --project=e2e-mobile --project=e2e-desktop",
     "test:golden": "playwright test --project=golden",
     "golden:update": "node scripts/golden-update.mjs",

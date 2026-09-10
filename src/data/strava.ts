@@ -20,6 +20,11 @@ export interface StravaSession {
   expiresAt: number;
   athleteName?: string;
   athleteId?: number;
+  /**
+   * The scope Strava actually granted, as returned in the callback query — which is not
+   * necessarily the scope we asked for. Undefined on a session stored before we recorded it.
+   */
+  scope?: string;
   connected: true;
 }
 
@@ -55,6 +60,7 @@ export function loadSession(): StravaSession | null {
       expiresAt: parsed.expiresAt ?? 0,
       athleteName: parsed.athleteName,
       athleteId: parsed.athleteId,
+      scope: parsed.scope,
       connected: true,
     };
   } catch {
@@ -94,14 +100,47 @@ export const redirectUri = (): string => `${window.location.origin}${window.loca
  * Sends the browser to Strava's consent screen. Works identically on a phone, which is the
  * reason this exists: it is a plain redirect, not a copied credential.
  */
-export function beginSignIn(config: StravaConfig): void {
+export interface SignInOptions {
+  /**
+   * Show Strava's consent screen even if the user has authorised before.
+   *
+   * `approval_prompt=auto` lets Strava skip that screen and silently reissue a token with
+   * whatever scope was granted last time. That is what you want for an ordinary reconnect,
+   * and exactly what you do not want when the previous grant was too narrow: the user gets
+   * a token that cannot read activities, the activities call 401s, and pressing Connect
+   * again reissues the same narrow token forever. Forcing the prompt is the only way back.
+   */
+  force?: boolean;
+}
+
+/** The Strava consent URL. Split out from beginSignIn so it can be tested. */
+export function authorizeUrl(config: StravaConfig, redirect: string, options: SignInOptions = {}): string {
   const url = new URL("https://www.strava.com/oauth/authorize");
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("redirect_uri", redirectUri());
-  url.searchParams.set("approval_prompt", "auto");
+  url.searchParams.set("redirect_uri", redirect);
+  url.searchParams.set("approval_prompt", options.force ? "force" : "auto");
   url.searchParams.set("scope", config.scope || "read,activity:read_all");
-  window.location.href = url.toString();
+  return url.toString();
+}
+
+/** Scopes that let us read the activity list. Without one of these the app has nothing. */
+const ACTIVITY_SCOPES = ["activity:read_all", "activity:read"];
+
+/**
+ * Whether this connection can actually read activities.
+ *
+ * A session stored before we recorded the granted scope reports true: those connections
+ * are, by definition, ones that were already working, and nagging them would be wrong.
+ */
+export function grantedActivityAccess(session: StravaSession): boolean {
+  if (session.scope === undefined) return true;
+  const granted = session.scope.split(",").map((s) => s.trim());
+  return ACTIVITY_SCOPES.some((s) => granted.includes(s));
+}
+
+export function beginSignIn(config: StravaConfig, options: SignInOptions = {}): void {
+  window.location.href = authorizeUrl(config, redirectUri(), options);
 }
 
 export interface SignInResult {
@@ -146,6 +185,9 @@ export async function completeSignIn(search: string): Promise<SignInResult> {
       expiresAt: typeof data.expires_at === "number" ? data.expires_at : 0,
       athleteName: athlete?.firstname,
       athleteId: athlete?.id,
+      // Strava reports what it actually granted here, which may be narrower than we asked
+      // for. Recording it is what lets the app notice and offer to ask again.
+      scope: params.get("scope") ?? undefined,
       connected: true,
     };
     saveSession(session);
@@ -164,8 +206,16 @@ export function clearOAuthParams(): void {
 
 // ---------------------------------------------------------------- refresh
 
-export const needsRefresh = (session: StravaSession, now = Date.now() / 1000): boolean =>
-  session.expiresAt > 0 && session.expiresAt - now < REFRESH_MARGIN_SECONDS;
+export const needsRefresh = (session: StravaSession, now = Date.now() / 1000): boolean => {
+  // A legacy pasted token has no refresh token, so there is nothing to refresh with. It is
+  // honoured until it fails and then discarded.
+  if (!session.refreshToken) return false;
+  // An unknown expiry used to read as "never expires", which left the session pinned to a
+  // stale access token for good. refreshSession writes expiresAt: 0 itself whenever Strava
+  // omits expires_at, so this is reachable in ordinary use, not just from old storage.
+  if (session.expiresAt <= 0) return true;
+  return session.expiresAt - now < REFRESH_MARGIN_SECONDS;
+};
 
 /**
  * Refreshes an expiring token. This is the function that turns "signs in three times a day"
@@ -238,12 +288,38 @@ async function authedGet<T>(path: string, session: StravaSession): Promise<Fetch
   const { session: fresh, error } = await validSession(session);
   if (!fresh) return { data: null, error };
 
+  const get = (s: StravaSession) =>
+    fetch(`https://www.strava.com/api/v3${path}`, { headers: { Authorization: `Bearer ${s.accessToken}` } });
+
   try {
-    const res = await fetch(`https://www.strava.com/api/v3${path}`, {
-      headers: { Authorization: `Bearer ${fresh.accessToken}` },
-    });
-    if (!res.ok) return { data: null, error: apiError(res.status), session: fresh };
-    return { data: (await res.json()) as T, error: null, session: fresh };
+    let current = fresh;
+    let res = await get(current);
+
+    // A 401 with a refresh token in hand is worth exactly one more try. The token may have
+    // been revoked, or expired earlier than the expiry we stored; either way, giving up
+    // without spending the refresh token turns a recoverable state into "connect again".
+    if (res.status === 401 && current.refreshToken) {
+      const renewed = await refreshSession(current);
+      if (renewed.session) {
+        current = renewed.session;
+        res = await get(current);
+      }
+    }
+
+    if (!res.ok) {
+      // A 401 that survives a refresh is usually not an expiry at all — it is a token that
+      // was never granted permission to read activities. Say so, because "connect again"
+      // is advice that cannot work: approval_prompt=auto will reissue the same narrow token.
+      const insufficient = res.status === 401 && !grantedActivityAccess(current);
+      return {
+        data: null,
+        error: insufficient
+          ? "Strava did not grant permission to read your activities. Reconnect and tick “View data about your activities”."
+          : apiError(res.status),
+        session: current,
+      };
+    }
+    return { data: (await res.json()) as T, error: null, session: current };
   } catch {
     return { data: null, error: "Could not reach Strava.", session: fresh };
   }

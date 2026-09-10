@@ -15,6 +15,7 @@ import { LookPicker } from "./ui/LookPicker.tsx";
 import { Suggestions } from "./ui/Suggestions.tsx";
 import { analysePhoto } from "./engine/photo.ts";
 import { handleShortcut, SHORTCUTS } from "./editor/shortcuts.ts";
+import { previewSettled, previewT } from "./editor/previewClock.ts";
 import { measureLayer } from "./engine/layers.ts";
 import { AlignBar } from "./ui/AlignBar.tsx";
 import { getLook, DEFAULT_LOOK_ID } from "./looks/index.ts";
@@ -152,6 +153,7 @@ export default function App() {
   const storeSetFormat = useEditor((st) => st.setFormat);
   const toggleSafeZones = useEditor((st) => st.toggleSafeZones);
   const clearSelection = useEditor((st) => st.clearSelection);
+  const deleteSelection = useEditor((st) => st.deleteSelection);
   const addLayer = useEditor((st) => st.addLayer);
   const patchDoc = useEditor((st) => st.patchDoc);
   const setStoreDoc = useEditor((st) => st.setDoc);
@@ -317,6 +319,11 @@ export default function App() {
         onToggleShortcutHelp: () => setShowShortcuts((v) => !v),
         onFit: () => {},
         onZoom: () => {},
+        // Layers live in 1000-wide canvas units; the stage is ~330 CSS px on a phone.
+        unitsPerPx: () => {
+          const r = canvasRef.current?.getBoundingClientRect();
+          return r?.width > 0 ? 1000 / r.width : 3;
+        },
       });
     };
     window.addEventListener("keydown", onKey);
@@ -365,11 +372,10 @@ export default function App() {
 
   const refreshDesigns = useCallback(async () => { setDesigns(await listDocs()); }, []);
 
-  const animT = () => {
-    const el = (performance.now() - startRef.current) / 1000;
-    const cycle = ANIM_SECONDS + 2.5; // animate, hold, replay
-    return Math.min(1, (el % cycle) / ANIM_SECONDS);
-  };
+  // Plays once, then holds. See src/editor/previewClock.ts for why it no longer replays.
+  const animElapsed = () => (performance.now() - startRef.current) / 1000;
+  const animT = () => previewT(animElapsed(), ANIM_SECONDS);
+  const animDone = () => previewSettled(animElapsed(), ANIM_SECONDS);
 
   const draw = useCallback(() => {
     const c = canvasRef.current; if (!c) return;
@@ -387,7 +393,10 @@ export default function App() {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
       renderLayers(ctx, st.doc, {
-        t: opts.animate ? animT() * 6 : Number.POSITIVE_INFINITY,
+        // Once settled, ask for t = Infinity rather than t = 6. Infinity is the settled
+        // state every preset agrees on (engine/anim.ts), and it is exactly what export and
+        // thumbnails pass — so a held preview is now pixel-identical to what you save.
+        t: opts.animate && !animDone() ? animT() * 6 : Number.POSITIVE_INFINITY,
         mode: "full",
         fields: st.fields,
         asset: st.assetResolver,
@@ -402,7 +411,14 @@ export default function App() {
 
   useEffect(() => {
     let alive = true, raf = 0;
-    const loop = () => { if (!alive) return; draw(); raf = requestAnimationFrame(loop); };
+    // Video keeps its own clock, so it loops for as long as it plays. A still design stops
+    // requesting frames the moment the animation settles — otherwise the phone redraws an
+    // identical frame sixty times a second for the life of the tab.
+    const loop = () => {
+      if (!alive) return;
+      draw();
+      if (media?.type === "video" || !animDone()) raf = requestAnimationFrame(loop);
+    };
     if (media?.type === "video" || opts.animate) loop(); else draw();
     return () => { alive = false; cancelAnimationFrame(raf); };
   }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look]);
@@ -771,9 +787,9 @@ export default function App() {
               onEmptyPointerUp={() => { dragRef.current = null; }}
             />
             {!media && (
-              <label className="dropzone">
+              <label className="add-media" data-testid="add-media" title="Vertical photos and videos work best">
+                <span aria-hidden="true">＋</span>
                 <strong>Add a photo or video</strong>
-                <span className="muted small">Vertical works best. Tap to choose.</span>
                 <input type="file" accept="image/*,video/*" onChange={onFile} data-testid="file-input" />
               </label>
             )}
@@ -795,6 +811,19 @@ export default function App() {
             {selection.length > 0 && (
               <button type="button" className="btn" onClick={clearSelection} data-testid="deselect">
                 Deselect{selection.length > 1 ? ` (${selection.length})` : ""}
+              </button>
+            )}
+            {/* Removing something used to mean leaving the canvas for the Layers panel or the
+                Inspector — and Backspace, the obvious way, does not exist on a phone. */}
+            {selection.length > 0 && (
+              <button
+                type="button"
+                className="btn danger"
+                onClick={deleteSelection}
+                title="Delete the selected element"
+                data-testid="delete-selection"
+              >
+                Delete{selection.length > 1 ? ` (${selection.length})` : ""}
               </button>
             )}
           </div>
@@ -1145,6 +1174,26 @@ export default function App() {
                 <button type="button" className="link" onClick={() => loadActivities(strava)}>Refresh</button>{" "}
                 <button type="button" className="link" onClick={disconnect}>Disconnect</button>
               </span>
+            </div>
+          )}
+
+          {/* A connection that was granted without activity permission cannot be repaired by
+              pressing Connect again: approval_prompt=auto makes Strava skip the consent
+              screen and reissue the same narrow token. This is the only way to be re-asked. */}
+          {strava.connected && !Strava.grantedActivityAccess(strava) && stravaConfig?.configured && (
+            <div className="row" data-testid="strava-scope-warning" style={{ marginTop: 8 }}>
+              <span className="small">
+                Strava did not grant permission to read your activities, so there is nothing to
+                import. Reconnect and tick “View data about your activities”.
+              </span>
+              <button
+                type="button"
+                className="btn primary strava"
+                data-testid="strava-regrant"
+                onClick={() => Strava.beginSignIn(stravaConfig, { force: true })}
+              >
+                Reconnect
+              </button>
             </div>
           )}
 

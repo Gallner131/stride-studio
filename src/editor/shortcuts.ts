@@ -18,6 +18,13 @@ export interface ShortcutContext {
   onToggleShortcutHelp: () => void;
   onFit: () => void;
   onZoom: (delta: number) => void;
+  /**
+   * Canvas units per CSS pixel of the stage, so a nudge can be expressed in what the user
+   * can see. The document is 1000 units wide but the stage is about 330 px on a phone, so
+   * nudging by one unit moved a layer a third of a pixel — recorded in the document, and
+   * invisible. Reported, reasonably, as "the arrow keys do nothing".
+   */
+  unitsPerPx: () => number;
 }
 
 /** True when a keystroke belongs to whatever the user is typing in. */
@@ -41,8 +48,8 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: "⌘D", action: "Duplicate" },
   { keys: "⌫", action: "Delete layer" },
   { keys: "⌘A", action: "Select all" },
-  { keys: "Arrows", action: "Nudge 1 unit" },
-  { keys: "⇧Arrows", action: "Nudge 10 units" },
+  { keys: "Arrows", action: "Nudge by a pixel" },
+  { keys: "⇧Arrows", action: "Nudge by ten pixels" },
   { keys: "⌘] / ⌘[", action: "Bring forward / send back" },
   { keys: "⌘⇧] / ⌘⇧[", action: "To front / to back" },
   { keys: "⌘L", action: "Lock / unlock" },
@@ -116,13 +123,24 @@ export function handleShortcut(event: KeyboardEvent, ctx: ShortcutContext): bool
     case "Delete":
       return selected.length > 0 ? consume(() => state.deleteSelection()) : false;
     case "ArrowLeft":
-      return selected.length > 0 ? consume(() => state.nudge(shift ? -10 : -1, 0)) : false;
     case "ArrowRight":
-      return selected.length > 0 ? consume(() => state.nudge(shift ? 10 : 1, 0)) : false;
     case "ArrowUp":
-      return selected.length > 0 ? consume(() => state.nudge(0, shift ? -10 : -1)) : false;
-    case "ArrowDown":
-      return selected.length > 0 ? consume(() => state.nudge(0, shift ? 10 : 1)) : false;
+    case "ArrowDown": {
+      if (selected.length === 0) return false;
+      // One press ≈ one pixel of the stage as displayed, ten with shift. Never zero: on a
+      // wide desktop stage a screen pixel is worth less than a unit, and flooring the step
+      // would make the keys dead again on exactly the displays that want precision.
+      const step = Math.max(1, Math.round(ctx.unitsPerPx())) * (shift ? 10 : 1);
+      const [dx, dy] =
+        key === "ArrowLeft"
+          ? [-step, 0]
+          : key === "ArrowRight"
+            ? [step, 0]
+            : key === "ArrowUp"
+              ? [0, -step]
+              : [0, step];
+      return consume(() => state.nudge(dx, dy));
+    }
     case "Enter": {
       if (!single) return false;
       const layer = state.doc.layers.find((l) => l.id === single);

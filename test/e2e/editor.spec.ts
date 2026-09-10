@@ -15,6 +15,33 @@ async function selectAllViaKeyboard(page: import("@playwright/test").Page) {
   await page.keyboard.press("ControlOrMeta+a");
 }
 
+// Removing something you just added meant leaving the canvas: the only delete controls were
+// the × in the Layers panel, a button in the Inspector, and the Backspace key — and a phone
+// has no Backspace. The canvas toolbar now carries one, next to Deselect.
+test("a selected element can be deleted without leaving the canvas", async ({ page }) => {
+  await openApp(page);
+  await addText(page, "Regrettable");
+  await tab(page, "Layers");
+  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(1);
+
+  await page.locator("[data-testid='delete-selection']").click();
+  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(0);
+
+  // With nothing selected there is nothing to delete, so the button goes away.
+  await expect(page.locator("[data-testid='delete-selection']")).toHaveCount(0);
+});
+
+test("deleting from the toolbar can be undone", async ({ page }) => {
+  await openApp(page);
+  await addText(page, "Second thoughts");
+  await page.locator("[data-testid='delete-selection']").click();
+  await tab(page, "Layers");
+  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(0);
+
+  await page.locator("[data-testid='undo']").click();
+  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(1);
+});
+
 test("shift-click builds a multi-selection", async ({ page }) => {
   await openApp(page);
   await addText(page, "One");
