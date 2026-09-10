@@ -163,6 +163,16 @@ input.wide{width:100%;padding:9px 11px;border-radius:9px;border:1px solid #3a3a3
   padding: 6px 8px; background: #1c1c1e; border: 1px solid #2a2a2c; border-radius: 10px;
 }
 .layer-row.on { border-color: #d8ff3a; }
+/* Drag to reorder. touch-action:none is what stops the phone treating the press as a scroll
+   before any pointermove reaches React. */
+.layer-grip {
+  background: none; border: 0; color: #6d6d72; cursor: grab;
+  width: 22px; height: 26px; border-radius: 6px; font-size: 13px;
+  touch-action: none; flex: 0 0 auto;
+}
+.layer-grip:hover { color: #f2f2f2; background: #2a2a2c; }
+.layer-row.dragging { opacity: 0.55; border-color: #d8ff3a; }
+.layer-row.dragging .layer-grip { cursor: grabbing; }
 .layer-icon { width: 22px; text-align: center; color: #d8ff3a; font-weight: 700; font-size: 12px; }
 .layer-name { flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: #f2f2f2; font-size: 13px; padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layer-name em { font-size: 11px; font-style: normal; }

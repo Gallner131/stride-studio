@@ -51,6 +51,7 @@ export function StudioOverlay({
   const select = useEditor((s) => s.select);
   const toggleSelect = useEditor((s) => s.toggleSelect);
   const clearSelection = useEditor((s) => s.clearSelection);
+  const removeLayer = useEditor((s) => s.removeLayer);
   const patchLayer = useEditor((s) => s.patchLayer);
   const setMode = useEditor((s) => s.setMode);
   const setEditingText = useEditor((s) => s.setEditingText);
@@ -121,6 +122,14 @@ export function StudioOverlay({
     const [x, y] = toCanvas(e.clientX, e.clientY);
     const upp = unitsPerPx();
     const result = beginGesture(doc, layout, selection, x, y, upp);
+
+    // The × handle. Checked before the empty-canvas branch, which would otherwise read a
+    // press that starts no drag and selects nothing as a tap on the background.
+    if (result.remove) {
+      removeLayer(result.remove);
+      setGuides([]);
+      return;
+    }
 
     if (!result.drag && result.select === null) {
       // Empty canvas: deselect, and let the legacy whole-design pan take over (§1.1 A2 is

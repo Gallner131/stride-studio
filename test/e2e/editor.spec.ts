@@ -31,6 +31,81 @@ test("a selected element can be deleted without leaving the canvas", async ({ pa
   await expect(page.locator("[data-testid='delete-selection']")).toHaveCount(0);
 });
 
+// §6.7 promised "tap to select, drag to reorder", but only ↑/↓ buttons existed. Render order
+// is array order, so dragging a row is the direct way to say what sits on top of what.
+test("layers can be dragged into a new order", async ({ page }) => {
+  await openApp(page);
+  await addText(page, "Alpha");
+  await addText(page, "Beta");
+  await tab(page, "Layers");
+
+  // A row reads "<layer name> <its text>", so match on the content we typed.
+  const order = async () =>
+    (await page.locator("[data-testid='layers-list'] .layer-name").allInnerTexts()).map((t) =>
+      t.includes("Beta") ? "Beta" : t.includes("Alpha") ? "Alpha" : t,
+    );
+  // The list is drawn top-layer first, so the most recently added is at the top.
+  expect(await order()).toEqual(["Beta", "Alpha"]);
+
+  const rows = page.locator("[data-testid='layers-list'] .layer-row");
+  const grip = rows.first().locator("[data-testid='layer-grip']");
+  const from = await grip.boundingBox();
+  const target = await rows.nth(1).boundingBox();
+  if (!from || !target) throw new Error("no rows");
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  // Move in steps: a single jump can be swallowed as a click rather than a drag.
+  await page.mouse.move(from.x + from.width / 2, target.y + target.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  expect(await order()).toEqual(["Alpha", "Beta"]);
+});
+
+// The × on the selection frame — removal without leaving the canvas at all.
+test("tapping the delete handle removes the element", async ({ page }) => {
+  await openApp(page);
+  await addText(page, "Gone");
+  await tab(page, "Layers");
+  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(1);
+
+  // Locate the handle by the pixels it actually draws, rather than a hardcoded coordinate
+  // or a test-only hook in the app. The disc is #FF5A5F at full alpha; the safe-zone tint
+  // shares the hue but is drawn at 0.10/0.55 alpha, so requiring a > 200 cannot confuse them.
+  const spot = await page.evaluate(() => {
+    const c = document.querySelector<HTMLCanvasElement>("[data-testid='overlay']");
+    if (!c) return null;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    const { data } = ctx.getImageData(0, 0, c.width, c.height);
+    let sx = 0;
+    let sy = 0;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i] ?? 0;
+      const g = data[i + 1] ?? 0;
+      const b = data[i + 2] ?? 0;
+      const a = data[i + 3] ?? 0;
+      if (a > 200 && r > 230 && g > 60 && g < 120 && b > 65 && b < 125) {
+        const p = i / 4;
+        sx += p % c.width;
+        sy += Math.floor(p / c.width);
+        n++;
+      }
+    }
+    if (n === 0) return null;
+    const rect = c.getBoundingClientRect();
+    return { x: (sx / n / c.width) * rect.width, y: (sy / n / c.height) * rect.height };
+  });
+  expect(spot, "the delete handle should be drawn on the selection").not.toBeNull();
+
+  const overlay = page.locator("[data-testid='overlay']");
+  await overlay.click({
+    position: { x: (spot as { x: number; y: number }).x, y: (spot as { x: number; y: number }).y },
+  });
+  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(0);
+});
+
 test("deleting from the toolbar can be undone", async ({ page }) => {
   await openApp(page);
   await addText(page, "Second thoughts");
