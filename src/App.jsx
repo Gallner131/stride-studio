@@ -383,6 +383,13 @@ export default function App() {
   const animT = () => previewT(animElapsed(), ANIM_SECONDS);
   const animDone = () => previewSettled(animElapsed(), ANIM_SECONDS);
 
+  // A Design from the Designs tab owns the whole composition: its elements ARE the design.
+  // The legacy template must then draw only the background, or its own hero, stats and route
+  // are painted underneath and you see two complete designs stacked on one canvas.
+  const designOwnsCanvas = (d) => (d?.layers ?? []).some((l) => l.source === "template");
+  // null means "draw nothing at all" — a sticker export of a Design is just its layers.
+  const legacyMode = (d, mode) => (designOwnsCanvas(d) ? (mode === "sticker" ? null : "background") : mode);
+
   const draw = useCallback(() => {
     const c = canvasRef.current; if (!c) return;
     const { media, act, template, opts, format } = stateRef.current;
@@ -391,7 +398,9 @@ export default function App() {
     let progress = 1;
     if (media?.type === "video" && media.el.duration) progress = media.el.currentTime / media.el.duration;
     const ctx = c.getContext("2d");
-    renderFrame(ctx, media, act, template, opts, progress, opts.animate ? animT() : 1);
+    const lm = legacyMode(stateRef.current.doc, "full");
+    if (lm) renderFrame(ctx, media, act, template, opts, progress, opts.animate ? animT() : 1, lm);
+    else ctx.clearRect(0, 0, W, H);
 
     // Document layers, drawn on top in canvas units (1000 wide, §4.1).
     const st = stateRef.current;
@@ -642,7 +651,9 @@ export default function App() {
   /** Legacy template pass plus the document layers, at `t` seconds. */
   const drawFull = (ctx, mode, t = Number.POSITIVE_INFINITY) => {
     const animT2 = t === Number.POSITIVE_INFINITY ? 1 : Math.min(1, t / ANIM_SECONDS);
-    renderFrame(ctx, media, effectiveAct, template, opts, 1, animT2, mode);
+    const lm = legacyMode(doc, mode);
+    if (lm) renderFrame(ctx, media, effectiveAct, template, opts, 1, animT2, lm);
+    else ctx.clearRect(0, 0, W, H);
     if (doc.layers.length) {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);

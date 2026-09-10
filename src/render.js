@@ -335,6 +335,10 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
   // Callers may pre-scale the context (thumbnails, fast export); everything below is in W x H design units.
   ctx.clearRect(0, 0, W, H);
   const sticker = mode === "sticker";
+  // "background": paint the photo/gradient and stop. Used when a data-driven Design owns the
+  // composition — otherwise the legacy template's own hero, stats and route are drawn
+  // UNDERNEATH the design's layers and you see two complete designs at once.
+  const backgroundOnly = mode === "background";
   const light = opts.theme === "light";
   const anim = opts.animate ? easeOut(t) : 1;
   const filter = (FILTERS.find((f) => f.id === opts.filter) || FILTERS[0]).css;
@@ -345,7 +349,7 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
   const SANS = (FONTS.find((f) => f.id === opts.fontBody) || FONTS[0]).css;
   const COND = (FONTS.find((f) => f.id === opts.fontHero) || FONTS[1]).css;
   const HERO = opts.fontHero && opts.fontHero !== "sans" ? COND : SANS; // big numbers use the hero font
-  if (!sticker && !solidBg) {
+  if (!sticker && (!solidBg || backgroundOnly)) {
     ctx.fillStyle = "#0a0a0a"; ctx.fillRect(0, 0, W, H);
     if (media) drawCover(ctx, media, zoom, filter);
     else {
@@ -358,6 +362,8 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
     if (opts.dim) { ctx.fillStyle = `rgba(0,0,0,${opts.dim})`; ctx.fillRect(0, 0, W, H); }
     grain(ctx, opts.grain);
   }
+
+  if (backgroundOnly) return;
 
   const txt = opts.textColor || (light ? "#FFFFFF" : "#0E0E0E");
   const sub = opts.textColor ? hexAlpha(opts.textColor, 0.8) : light ? "rgba(255,255,255,0.8)" : "rgba(14,14,14,0.72)";
