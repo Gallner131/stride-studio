@@ -33,9 +33,9 @@ export async function tab(page: Page, name: TabName): Promise<void> {
 /** Attaches the fixture photo and waits for the image decode to reach the canvas. */
 export async function addFixturePhoto(page: Page): Promise<void> {
   await page.setInputFiles("[data-testid='file-input']", FIXTURE_PHOTO);
-  // The dropzone unmounts once media is set, which is the observable signal that
+  // The photo prompt unmounts once media is set, which is the observable signal that
   // onFile's img.onload has fired.
-  await page.waitForSelector(".dropzone", { state: "detached" });
+  await page.waitForSelector("[data-testid='add-media']", { state: "detached" });
 }
 
 /** Reads the preview canvas as a base64 PNG, for change detection between actions. */

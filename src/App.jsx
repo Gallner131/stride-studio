@@ -153,6 +153,7 @@ export default function App() {
   const storeSetFormat = useEditor((st) => st.setFormat);
   const toggleSafeZones = useEditor((st) => st.toggleSafeZones);
   const clearSelection = useEditor((st) => st.clearSelection);
+  const deleteSelection = useEditor((st) => st.deleteSelection);
   const addLayer = useEditor((st) => st.addLayer);
   const patchDoc = useEditor((st) => st.patchDoc);
   const setStoreDoc = useEditor((st) => st.setDoc);
@@ -318,6 +319,11 @@ export default function App() {
         onToggleShortcutHelp: () => setShowShortcuts((v) => !v),
         onFit: () => {},
         onZoom: () => {},
+        // Layers live in 1000-wide canvas units; the stage is ~330 CSS px on a phone.
+        unitsPerPx: () => {
+          const r = canvasRef.current?.getBoundingClientRect();
+          return r?.width > 0 ? 1000 / r.width : 3;
+        },
       });
     };
     window.addEventListener("keydown", onKey);
@@ -781,9 +787,9 @@ export default function App() {
               onEmptyPointerUp={() => { dragRef.current = null; }}
             />
             {!media && (
-              <label className="dropzone">
+              <label className="add-media" data-testid="add-media" title="Vertical photos and videos work best">
+                <span aria-hidden="true">＋</span>
                 <strong>Add a photo or video</strong>
-                <span className="muted small">Vertical works best. Tap to choose.</span>
                 <input type="file" accept="image/*,video/*" onChange={onFile} data-testid="file-input" />
               </label>
             )}
@@ -805,6 +811,19 @@ export default function App() {
             {selection.length > 0 && (
               <button type="button" className="btn" onClick={clearSelection} data-testid="deselect">
                 Deselect{selection.length > 1 ? ` (${selection.length})` : ""}
+              </button>
+            )}
+            {/* Removing something used to mean leaving the canvas for the Layers panel or the
+                Inspector — and Backspace, the obvious way, does not exist on a phone. */}
+            {selection.length > 0 && (
+              <button
+                type="button"
+                className="btn danger"
+                onClick={deleteSelection}
+                title="Delete the selected element"
+                data-testid="delete-selection"
+              >
+                Delete{selection.length > 1 ? ` (${selection.length})` : ""}
               </button>
             )}
           </div>

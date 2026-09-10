@@ -16,8 +16,19 @@ hr{border:0;border-top:1px solid #2c2c2c;margin:16px 0}
 .stage{position:relative;aspect-ratio:9/16;max-height:68vh;margin:0 auto;border-radius:18px;overflow:hidden;background:#000}
 .stage canvas,.stage img,.stage video{display:block;width:100%;height:100%;object-fit:contain}
 .small-stage{max-height:55vh}
-.dropzone{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:rgba(40,40,40,.35);cursor:pointer}
-.dropzone input{display:none}
+/* The photo prompt is a compact pill, not a full-bleed wash.
+   It used to cover the whole stage with rgba(40,40,40,.35) and print two lines of text over
+   the design, so neither was legible — and because it sat under .overlay-canvas (z-index 2),
+   its own "Tap to choose" instruction was dead: the overlay ate every click. It now sits
+   above the overlay so it actually opens the picker, and leaves the design visible and
+   editable everywhere else. */
+.add-media{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:3;
+  display:flex;align-items:center;gap:8px;max-width:calc(100% - 24px);
+  padding:10px 16px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  background:rgba(17,17,17,.78);border:1px solid rgba(255,255,255,.28);
+  color:#fff;font-size:13px;backdrop-filter:blur(6px)}
+.add-media strong{font-weight:600}
+.add-media input{display:none}
 .btnrow{display:flex;gap:8px;margin-top:12px}
 .btn{flex:1;text-align:center;padding:12px 10px;border-radius:12px;border:0;background:#2a2a2a;color:#f2f2f2;font-weight:500;font-size:14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .btn:hover{background:#343434}

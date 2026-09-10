@@ -20,7 +20,7 @@ test("first run: demo activity is loaded and the app looks finished before any i
   await expect(page.locator("[data-testid^='tpl-']")).toHaveCount(27);
 
   // §10.1: the empty-canvas call to action.
-  await expect(page.locator(".dropzone strong")).toHaveText("Add a photo or video");
+  await expect(page.locator("[data-testid='add-media'] strong")).toHaveText("Add a photo or video");
 
   // §3.8: the demo run is already loaded, so the app is useful in the first ten seconds.
   await tab(page, "Stats");

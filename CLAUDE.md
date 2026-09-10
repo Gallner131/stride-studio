@@ -165,6 +165,18 @@ shut, with the reasoning at the site of the fix:
 The lesson generalises: config that looks like it only affects tooling can reach the bundle.
 When a phase claims to change no app behaviour, prove it with `cmp`.
 
+## The e2e suite serves `dist/`, which is not rebuilt for you
+
+`scripts/serve.mjs` is a static file server. It does **not** build. So `npx playwright test`
+on its own runs the browser suite against whatever `dist/index.html` happens to be on disk,
+which may be hours old and from a different branch. This is silent: the suite passes or fails
+confidently against code you are not looking at, and a stash-based "does my test catch the
+bug?" check reports the same answer both ways.
+
+`npm run test:e2e` now has a `pretest:e2e` that builds first. If you invoke Playwright
+directly — to run one spec or one `-g` filter, which you will — **run `npm run build`
+yourself first.**
+
 ## Things found by the tests that are worth not rediscovering
 
 - **The look linter caught the spec.** Appendix B's Clinic, Retro '78 and Studio accents all
