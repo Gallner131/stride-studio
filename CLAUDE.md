@@ -32,6 +32,31 @@ Read `STRIDE_STUDIO_V2_SPEC.md` first. Every task references a section of it.
 
 ---
 
+# Where the work is up to
+
+Phases 0-7 all have substantial work landed. What is NOT done, in priority order:
+
+1. **The 27 legacy templates are not re-authored as data** (§13 Phase 2 step 2). They still
+   live in `src/render.js`'s switch. CLAUDE.md rule 8 says a legacy case stays until its
+   replacement passes the goldens, and the goldens only run in the pinned container — so
+   this belongs in a PR where CI can prove parity, one category at a time. The new
+   data-driven designs live in `src/templates/` and appear in a separate **Designs** tab;
+   the legacy catalogue is untouched in the **Style** tab.
+2. **The golden baseline has never been recorded.** Run the `golden-update` workflow. Until
+   then CI's golden job fails by design.
+3. **Fonts are still the six system stacks** (§5.6 wants fifteen bundled woff2). Every look
+   carries `legacyFonts` mapping to the closest available stack, so looks render correctly
+   today and upgrade when the real faces land. Bundling them will change every golden, in
+   its own labelled PR.
+4. **Adaptive legibility (§2.7 S4)** is not implemented. Looks declare a `legibility`
+   mechanism and the linter checks contrast on the look's own background, but nothing yet
+   measures the photo under a text box at render time.
+5. **The Strava client flow is not wired up.** `api/strava/token.ts` and `refresh.ts` are
+   written and reviewed but untested — they need credentials and the stable callback domain
+   that §16 decision 1 is waiting on.
+6. **FIT import** (needs the lazy `@garmin/fitsdk` chunk), **milestones/deltas/gear/weather**
+   (need activity history or the API), **club kit and batch export** (§2.7 S15).
+
 # Phase 0 notes (read before touching the tests)
 
 Things established while building the fence that are not obvious from the spec.
@@ -139,6 +164,27 @@ shut, with the reasoning at the site of the fix:
 
 The lesson generalises: config that looks like it only affects tooling can reach the bundle.
 When a phase claims to change no app behaviour, prove it with `cmp`.
+
+## Things found by the tests that are worth not rediscovering
+
+- **The look linter caught the spec.** Appendix B's Clinic, Retro '78 and Studio accents all
+  failed its own §12.7 rule that `accent` must reach 3:1 against `bg` (1.87:1, 2.19:1,
+  2.57:1). Corrected in `scripts/make-looks.mjs` by the least hue-preserving darkening that
+  clears the bar; the reasoning is recorded there.
+- **HYROX must not report distance.** The race contains 8 km of running, but the legacy model
+  has one (distance, time) pair, so pairing 8 km with the FINISH time makes every template
+  print about 8:40 /km when the athlete ran about 4:19 /km. `hyroxToActivity` sets distance
+  to 0 deliberately; the real figures are bindings (`{runPace}`, `{runTotal}`).
+- **A degenerate GPS track is not a route.** Indoor exports write trackpoints pinned at 0,0.
+  `src/data/gpx.ts` drops a track with no span, otherwise the Map designs are offered and
+  draw a dot.
+- **zundo's `pause()` does not record what changed while paused.** Pausing around a drag
+  makes the whole drag un-undoable. `StudioOverlay` snapshots the document at pointer-down
+  and pushes that one state on pointer-up instead.
+- **A hash-only navigation does not remount.** Testing the shared-layout link needs a fresh
+  `page.goto`, not a hash change.
+- **The overlay canvas covers the stage.** Pointer tests must target
+  `[data-testid='overlay']`, not `[data-testid='stage']`.
 
 ## Linter scope
 

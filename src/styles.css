@@ -234,3 +234,11 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
 .design-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .design-name { background: none; border: 0; color: #f2f2f2; text-align: left; font-size: 13px; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .design-meta input { background: #111; color: #f2f2f2; border: 1px solid #2a2a2c; border-radius: 6px; padding: 4px 6px; font-size: 13px; }
+
+/* ---------- Crash screen ---------- */
+.crash { max-width: 520px; margin: 48px auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+.crash h2 { margin: 0; font-size: 20px; }
+.crash-message {
+  background: #1c1c1e; border: 1px solid #ff5a5f; border-radius: 10px; padding: 12px;
+  font-size: 12px; white-space: pre-wrap; word-break: break-word; margin: 0; color: #ff8a80;
+}
