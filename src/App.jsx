@@ -29,6 +29,9 @@ import {
 } from "./export/image.ts";
 import { canUseWebCodecs, exportVideo, MAX_CLIP_SECONDS } from "./export/video.ts";
 import { registerServiceWorker } from "./pwa/register.ts";
+import { buildCaption, TONES } from "./export/caption.ts";
+import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
+import { MyDesigns } from "./ui/MyDesigns.tsx";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer, newTextLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
@@ -156,6 +159,7 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [importNotes, setImportNotes] = useState([]);
   const [quality, setQuality] = useState("hd"); // 720 | 1080 (hd) | 2x
+  const [tone, setTone] = useState("deadpan");
   const [storageNote, setStorageNote] = useState("");
 
   // Undo/redo comes from zundo's temporal store (§6.1).
@@ -340,8 +344,12 @@ export default function App() {
   }, [doc, format, media, act, template, opts, fields, assetResolver]);
 
   // Restore the last design on first load (§3.8 "Continue last design").
+  //
+  // Skipped when the URL carries a shared layout: both effects run on mount and this one is
+  // async, so it would otherwise land second and overwrite the layout the link asked for.
   useEffect(() => {
     (async () => {
+      if (window.location.hash.startsWith("#layout=")) return;
       const { lastDocId } = loadPrefs();
       if (!lastDocId) return;
       const saved = await loadDoc(lastDocId);
@@ -528,6 +536,18 @@ export default function App() {
     canUseWebCodecs(1080, 1920).then((ok) => setVideoPath(ok ? "webcodecs" : "mediarecorder"));
   }, []);
 
+  // §2.7 S16: a layout link opens as a template, with no server involved.
+  useEffect(() => {
+    const { layout, error: linkError } = layoutFromLocation(window.location.hash);
+    if (linkError) { setError(linkError); return; }
+    if (!layout) return;
+    setStoreDoc(layoutToDocument(layout, useEditor.getState().doc));
+    if (layout.lookId) setLookId(layout.lookId);
+    setFmt(layout.format);
+    window.history.replaceState({}, "", window.location.pathname);
+    say(`"${layout.name}" opened — add your own photo and run`);
+  }, []);
+
   // §9.5: opens offline, and says so rather than silently swapping under the user.
   const [updateReady, setUpdateReady] = useState(false);
   useEffect(() => { registerServiceWorker(() => setUpdateReady(true)); }, []);
@@ -648,8 +668,23 @@ export default function App() {
       say("Sharing is not available in this browser. Use Download, then post from your camera roll.");
     } catch (e) { if (e.name !== "AbortError") say(`Could not share: ${e.message}`); }
   };
+  const captionInput = () => ({
+    name: effectiveAct.name,
+    sport: effectiveAct.sport ?? "run",
+    distance: d.hasDist ? `${fmtDist(d.dist)} ${d.unit}` : null,
+    time: fmtTime(effectiveAct.time ?? 0),
+    pace: d.hasDist ? d.paceStr : null,
+    elevation: effectiveAct.elevation ? `${Math.round(d.elevV)} ${d.elevU}` : null,
+    hr: effectiveAct.hr ? `${effectiveAct.hr} bpm` : null,
+    calories: effectiveAct.calories ? `${effectiveAct.calories} kcal` : null,
+    isHyrox: !!hyrox,
+    hyroxDivision: hyrox ? hyroxFields(hyrox).hyroxDivision : null,
+    roxzone: hyrox ? hyroxFields(hyrox).roxzone : null,
+  });
+  const caption = () => buildCaption(captionInput(), tone);
+
   const copyCaption = async () => {
-    try { await navigator.clipboard.writeText(captionFor(effectiveAct, opts)); say("Caption copied"); } catch { say("Copy failed. Long-press the caption text instead."); }
+    try { await navigator.clipboard.writeText(caption()); say("Caption copied"); } catch { say("Copy failed. Long-press the caption text instead."); }
   };
 
   const set = (k, val) => setOpts((o) => ({ ...o, [k]: val }));
@@ -740,6 +775,30 @@ export default function App() {
                 }}
               />
                 <TemplateGallery caps={caps} onApplied={(name) => say(`${name} applied — tap anything to edit it`)} />
+
+              <div className="card">
+                <div className="muted small label">My designs</div>
+                <MyDesigns onOpen={(name) => say(`Opened "${name}"`)} onToast={say} />
+              </div>
+
+              {doc.layers.length > 0 && (
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="share-layout"
+                  onClick={async () => {
+                    const url = shareUrl(doc, window.location.origin, window.location.pathname);
+                    try {
+                      await navigator.clipboard.writeText(url);
+                      say("Layout link copied — anyone can open it with their own run");
+                    } catch {
+                      setError(`Copy failed. The link is: ${url}`);
+                    }
+                  }}
+                >
+                  Share this layout
+                </button>
+              )}
             </>
           )}
           {tab === "add" && <AddMenu onAdded={() => setTab("style")} />}
@@ -893,7 +952,21 @@ export default function App() {
               </div>
               <div className="card">
                 <div className="muted small label">Caption</div>
-                <pre className="caption">{captionFor(effectiveAct, opts)}</pre>
+                <div className="chips tight" style={{ marginBottom: 8 }}>
+                  {TONES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`chip ${tone === t.id ? "on" : ""}`}
+                      title={t.hint}
+                      data-testid={`tone-${t.id}`}
+                      onClick={() => setTone(t.id)}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+                <pre className="caption" data-testid="caption">{caption()}</pre>
                 <button type="button" className="btn" onClick={copyCaption} data-testid="copy-caption">Copy caption</button>
               </div>
             </div>
