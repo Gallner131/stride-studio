@@ -73,10 +73,12 @@ export interface OverlayInput {
   showSafeZones: boolean;
   /** Canvas units per screen pixel, so handles stay screen-sized. */
   unitsPerPx: number;
+  /** The live box-select rectangle, while one is being dragged. */
+  marquee?: { x: number; y: number; w: number; h: number } | null;
 }
 
 export function drawOverlay(ctx: CanvasRenderingContext2D, input: OverlayInput): void {
-  const { doc, selected, origins, guides, showSafeZones, unitsPerPx } = input;
+  const { doc, selected, origins, guides, showSafeZones, unitsPerPx, marquee } = input;
   const H = canvasHeight(doc.format);
 
   ctx.clearRect(0, 0, CANVAS_W, H);
@@ -100,6 +102,17 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, input: OverlayInput):
       }
       ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  if (marquee) {
+    ctx.save();
+    ctx.fillStyle = "rgba(216,255,58,0.12)";
+    ctx.fillRect(marquee.x, marquee.y, marquee.w, marquee.h);
+    ctx.strokeStyle = ACCENT;
+    ctx.lineWidth = unitsPerPx;
+    ctx.setLineDash([5 * unitsPerPx, 4 * unitsPerPx]);
+    ctx.strokeRect(marquee.x, marquee.y, marquee.w, marquee.h);
     ctx.restore();
   }
 

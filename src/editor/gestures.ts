@@ -214,3 +214,42 @@ const normalise = (deg: number): number => {
   if (d < -180) d += 360;
   return d;
 };
+
+// ---------------------------------------------------------------- marquee
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** A rectangle from two corners, whichever way the drag went. */
+export function normaliseRect(x0: number, y0: number, x1: number, y1: number): Rect {
+  return {
+    x: Math.min(x0, x1),
+    y: Math.min(y0, y1),
+    w: Math.abs(x1 - x0),
+    h: Math.abs(y1 - y0),
+  };
+}
+
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+/**
+ * Which layers a marquee has caught, in layer order.
+ *
+ * Overlap rather than full containment: a box that visibly crosses something but does not
+ * select it is the kind of thing people retry three times before giving up. Locked and
+ * hidden layers are left alone.
+ */
+export function marqueeSelection(layers: Layer[], placed: Map<string, Placed>, marquee: Rect): string[] {
+  const ids: string[] = [];
+  for (const l of layers) {
+    if (l.locked || l.visible === false) continue;
+    const p = placed.get(l.id);
+    if (p && overlaps(marquee, p.box)) ids.push(l.id);
+  }
+  return ids;
+}

@@ -117,6 +117,39 @@ test("deleting from the toolbar can be undone", async ({ page }) => {
   await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(1);
 });
 
+// Drag on empty canvas box-selects. This gesture used to pan the background photo, which
+// has its own sliders in the Adjust tab.
+test("dragging across the canvas box-selects what it touches", async ({ page }) => {
+  await openApp(page);
+  await addText(page, "One");
+  await addText(page, "Two");
+  await page.locator("[data-testid='overlay']").click({ position: { x: 5, y: 5 } });
+  await expect(page.locator("[data-testid='deselect']")).toHaveCount(0);
+
+  const overlay = page.locator("[data-testid='overlay']");
+  const box = await overlay.boundingBox();
+  if (!box) throw new Error("no overlay");
+
+  // Sweep most of the canvas, which must catch both text layers. Started well inside the
+  // corner: .stage has an 18px border-radius and clips, so a point a few pixels from the
+  // corner is not over the canvas at all and never delivers a pointerdown.
+  await page.mouse.move(box.x + box.width * 0.1, box.y + box.height * 0.08);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.92, { steps: 12 });
+  await page.mouse.up();
+
+  await expect(page.locator("[data-testid='deselect']")).toContainText("(2)");
+});
+
+test("a tap on empty canvas still just deselects", async ({ page }) => {
+  await openApp(page);
+  await addText(page, "One");
+  await expect(page.locator("[data-testid='deselect']")).toHaveCount(1);
+
+  await page.locator("[data-testid='overlay']").click({ position: { x: 5, y: 5 } });
+  await expect(page.locator("[data-testid='deselect']")).toHaveCount(0);
+});
+
 test("shift-click builds a multi-selection", async ({ page }) => {
   await openApp(page);
   await addText(page, "One");

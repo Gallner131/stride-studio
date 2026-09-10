@@ -788,9 +788,6 @@ export default function App() {
             <StudioOverlay
               fields={fields}
               asset={assetResolver}
-              onEmptyPointerDown={(e) => { const r = e.currentTarget.getBoundingClientRect(); dragRef.current = { x: e.clientX, y: e.clientY, ox: opts.offsetX || 0, oy: opts.offsetY, k: W / r.width }; e.currentTarget.setPointerCapture(e.pointerId); }}
-              onEmptyPointerMove={(e) => { const dr = dragRef.current; if (!dr) return; const nx = Math.round(dr.ox + (e.clientX - dr.x) * dr.k), ny = Math.round(dr.oy + (e.clientY - dr.y) * dr.k); setOpts((o) => ({ ...o, offsetX: Math.max(-500, Math.min(500, nx)), offsetY: Math.max(-800, Math.min(800, ny)) })); }}
-              onEmptyPointerUp={() => { dragRef.current = null; }}
             />
             {!media && (
               <label className="add-media" data-testid="add-media" title="Vertical photos and videos work best">

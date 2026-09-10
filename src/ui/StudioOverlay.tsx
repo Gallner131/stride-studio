@@ -1,6 +1,6 @@
 import React from "react";
-import type { DragState } from "../editor/gestures";
-import { beginGesture, cycleAt, updateGesture } from "../editor/gestures";
+import type { DragState, Rect } from "../editor/gestures";
+import { beginGesture, cycleAt, marqueeSelection, normaliseRect, updateGesture } from "../editor/gestures";
 import { drawOverlay } from "../editor/overlay";
 import type { Guide } from "../editor/snapping";
 import { useEditor } from "../editor/store";
@@ -25,10 +25,6 @@ function measuringContext(): CanvasRenderingContext2D {
 export interface StudioOverlayProps {
   fields: FieldTable;
   asset: (assetId: string) => CanvasImageSource | null;
-  /** Called when a press lands on empty canvas, so the legacy whole-design pan still works. */
-  onEmptyPointerDown?: (e: React.PointerEvent<HTMLCanvasElement>) => void;
-  onEmptyPointerMove?: (e: React.PointerEvent<HTMLCanvasElement>) => void;
-  onEmptyPointerUp?: (e: React.PointerEvent<HTMLCanvasElement>) => void;
 }
 
 /**
@@ -37,13 +33,7 @@ export interface StudioOverlayProps {
  * Sits above the design canvas and owns selection, drag, resize, rotate and inline text
  * editing. The render engine never draws handles or guides; they live here (§5.2 step 5).
  */
-export function StudioOverlay({
-  fields,
-  asset,
-  onEmptyPointerDown,
-  onEmptyPointerMove,
-  onEmptyPointerUp,
-}: StudioOverlayProps) {
+export function StudioOverlay({ fields, asset }: StudioOverlayProps) {
   const doc = useEditor((s) => s.doc);
   const selection = useEditor((s) => s.selection);
   const safeZones = useEditor((s) => s.safeZones);
@@ -62,6 +52,15 @@ export function StudioOverlay({
   const dragRef = React.useRef<DragState | null>(null);
   const lastTapRef = React.useRef<{ t: number; id: string | null }>({ t: 0, id: null });
   const [guides, setGuides] = React.useState<Guide[]>([]);
+  // Drag on empty canvas box-selects. It used to pan the background photo, which is a
+  // once-per-design adjustment with its own sliders in the Adjust tab; selecting is
+  // constant, so it gets the canvas.
+  const marqueeRef = React.useRef<{ x0: number; y0: number } | null>(null);
+  // The live rectangle, kept in a ref as well as state. pointerup does not reliably carry
+  // the final position — with pointer capture it can report the point the press started at,
+  // which yields a zero-size box and selects nothing — so the last move is the truth.
+  const marqueeRectRef = React.useRef<Rect | null>(null);
+  const [marquee, setMarquee] = React.useState<Rect | null>(null);
 
   if (!measureRef.current) measureRef.current = measuringContext();
 
@@ -115,8 +114,9 @@ export function StudioOverlay({
       guides,
       showSafeZones: safeZones,
       unitsPerPx: unitsPerPx(),
+      marquee,
     });
-  }, [doc, layout, selection, guides, safeZones, H, unitsPerPx]);
+  }, [doc, layout, selection, guides, safeZones, H, unitsPerPx, marquee]);
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const [x, y] = toCanvas(e.clientX, e.clientY);
@@ -132,11 +132,12 @@ export function StudioOverlay({
     }
 
     if (!result.drag && result.select === null) {
-      // Empty canvas: deselect, and let the legacy whole-design pan take over (§1.1 A2 is
-      // fixed for doc layers; the template itself is still one blob until Phase 2).
+      // Empty canvas: deselect and begin a marquee.
       clearSelection();
       setGuides([]);
-      onEmptyPointerDown?.(e);
+      marqueeRef.current = { x0: x, y0: y };
+      marqueeRectRef.current = null;
+      e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
 
@@ -173,11 +174,17 @@ export function StudioOverlay({
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const drag = dragRef.current;
-    if (!drag) {
-      onEmptyPointerMove?.(e);
+    const m = marqueeRef.current;
+    if (m) {
+      const [mx, my] = toCanvas(e.clientX, e.clientY);
+      const rect = normaliseRect(m.x0, m.y0, mx, my);
+      marqueeRectRef.current = rect;
+      setMarquee(rect);
       return;
     }
+
+    const drag = dragRef.current;
+    if (!drag) return;
 
     const layer = doc.layers.find((l) => l.id === drag.layerId);
     if (!layer) return;
@@ -218,6 +225,23 @@ export function StudioOverlay({
   };
 
   const endDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const m = marqueeRef.current;
+    if (m) {
+      marqueeRef.current = null;
+      setMarquee(null);
+      const rect = marqueeRectRef.current;
+      marqueeRectRef.current = null;
+      if (!rect) return;
+      // A tap is not a marquee. Below a few pixels of travel this was a press on empty
+      // canvas, which has already deselected — selecting nothing again is the right answer.
+      const min = 5 * unitsPerPx();
+      if (rect.w >= min || rect.h >= min) {
+        const caught = marqueeSelection(doc.layers, layout.byId, rect);
+        if (caught.length > 0) select(caught);
+      }
+      return;
+    }
+
     const drag = dragRef.current;
     if (drag) {
       dragRef.current = null;
@@ -235,8 +259,6 @@ export function StudioOverlay({
           futureStates: [],
         }));
       }
-    } else {
-      onEmptyPointerUp?.(e);
     }
   };
 
