@@ -13,3 +13,4 @@ dist/
 
 # Golden diffs are a CI artifact, never committed (§12.2).
 /test/golden/diffs/
+.vercel

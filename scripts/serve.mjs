@@ -7,6 +7,8 @@ import { extname, join, normalize, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const PORT = Number(process.argv[2] ?? 4173);
+// Bind to all interfaces when asked, so a phone on the same Wi-Fi can reach the dev build.
+const HOST = process.argv.includes("--lan") ? "0.0.0.0" : "127.0.0.1";
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -24,6 +26,22 @@ const TYPES = {
 
 createServer((req, res) => {
   const urlPath = decodeURIComponent((req.url ?? "/").split("?")[0]);
+
+  // Emulate the serverless functions locally. Without this, the app's config probe 404s,
+  // which the browser logs as a console error and the e2e suite rightly treats as a fault.
+  // Reporting `configured: false` is also the truthful answer: there are no credentials here.
+  if (urlPath.startsWith("/api/strava/")) {
+    const body =
+      urlPath === "/api/strava/config"
+        ? JSON.stringify({ configured: false, clientId: "", scope: "" })
+        : JSON.stringify({ error: "not_configured" });
+    res.writeHead(urlPath === "/api/strava/config" ? 200 : 501, {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+    });
+    res.end(body);
+    return;
+  }
   let rel = normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
   if (rel === "/" || rel === "\\") rel = "/index.html";
 
@@ -51,6 +69,6 @@ createServer((req, res) => {
     "cache-control": "no-store",
   });
   createReadStream(file).pipe(res);
-}).listen(PORT, "127.0.0.1", () => {
-  console.log(`serving ${ROOT} on http://127.0.0.1:${PORT}`);
+}).listen(PORT, HOST, () => {
+  console.log(`serving ${ROOT} on http://${HOST === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1"}:${PORT}`);
 });

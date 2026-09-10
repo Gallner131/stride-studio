@@ -29,6 +29,7 @@ import {
 } from "./export/image.ts";
 import { canUseWebCodecs, exportVideo, MAX_CLIP_SECONDS } from "./export/video.ts";
 import { registerServiceWorker } from "./pwa/register.ts";
+import * as Strava from "./data/strava.ts";
 import { buildCaption, TONES } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
 import { MyDesigns } from "./ui/MyDesigns.tsx";
@@ -39,9 +40,8 @@ import {
   renderFrame, captionFor, fmtTime, fmtPace, fmtDate, fmtDist, decodePolyline, derive,
 } from "./render.js";
 
-const STRAVA_KEY = "stride.strava";
-const loadStored = () => { try { return JSON.parse(localStorage.getItem(STRAVA_KEY) || "{}"); } catch { return {}; } };
-const store = (obj) => { try { localStorage.setItem(STRAVA_KEY, JSON.stringify(obj)); } catch {} };
+// Strava session storage lives in src/data/strava.ts, which owns the key and migrates the
+// legacy pasted-token shape (§7.2).
 const canShareFiles = typeof navigator !== "undefined" && !!navigator.canShare;
 const LOOKS_KEY = "stride.looks";
 const loadLooks = () => { try { return JSON.parse(localStorage.getItem(LOOKS_KEY) || "[]"); } catch { return []; } };
@@ -134,7 +134,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [animKey, setAnimKey] = useState(0);
-  const [strava, setStrava] = useState(() => loadStored());
+  const [strava, setStrava] = useState(() => Strava.loadSession() ?? {});
   const [looks, setLooks] = useState(() => loadLooks());
   const [lookName, setLookName] = useState("");
   const dragRef = useRef(null);
@@ -407,47 +407,151 @@ export default function App() {
     return () => { alive = false; cancelAnimationFrame(raf); };
   }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look]);
 
-  // OAuth redirect (?code=...)
+  // ---- Strava (§7.2) ----
+  //
+  // Sign in ONCE. The old flow asked people to paste an access token that Strava expires
+  // after six hours (§1.2 E1), which is why the connection kept dropping — and pasting a
+  // token is not something anyone will do on a phone. This is a plain redirect, so it works
+  // identically on a phone, and the token refreshes itself from then on.
+  const [stravaConfig, setStravaConfig] = useState(null);
+
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get("code");
-    if (!code) return;
-    const saved = loadStored();
-    ["code", "scope", "state"].forEach((k) => url.searchParams.delete(k));
-    window.history.replaceState({}, "", url.toString());
-    if (!saved.clientId || !saved.clientSecret) { setError("Strava sent a code back but the client ID/secret were not saved. Open Connect Strava and try again."); return; }
-    (async () => {
-      setShowStrava(true); setStatus("Finishing Strava sign-in...");
-      try {
-        const r = await fetch("https://www.strava.com/oauth/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: saved.clientId, client_secret: saved.clientSecret, code, grant_type: "authorization_code" }) });
-        const data = await r.json();
-        if (!r.ok || !data.access_token) throw new Error(data.message || `HTTP ${r.status}`);
-        const next = { ...saved, token: data.access_token, refresh: data.refresh_token, expires: data.expires_at, athlete: data.athlete?.firstname, connected: true };
-        store(next); setStrava(next);
-        await fetchActivities(next.token);
-      } catch (e) { setStatus(`Sign-in failed: ${e.message}`); }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    Strava.fetchConfig().then(setStravaConfig);
   }, []);
 
+  // Handle the redirect back from Strava, then load the activity list.
+  useEffect(() => {
+    (async () => {
+      const { session, error: signInError } = await Strava.completeSignIn(window.location.search);
+      Strava.clearOAuthParams();
+      if (signInError) { setShowStrava(true); setStatus(signInError); return; }
+      if (!session) return;
+      setStrava(session);
+      setShowStrava(true);
+      await loadActivities(session);
+    })();
+  }, []);
+
+  const loadActivities = async (session) => {
+    setStatus("Loading your recent activities…");
+    const { data, error: apiError, session: fresh } = await Strava.fetchActivities(session, 30);
+    if (fresh && fresh !== session) setStrava(fresh);
+    if (apiError) { setStatus(apiError); return; }
+    setActivities(data ?? []);
+    setStatus((data ?? []).length ? `${data.length} activities. Tap one.` : "Connected, but no activities found.");
+  };
+
+  const connectStrava = () => {
+    if (!stravaConfig?.configured) {
+      setStatus("Strava sign-in is not configured on this deployment yet.");
+      return;
+    }
+    Strava.beginSignIn(stravaConfig);
+  };
+
+  const disconnect = () => {
+    Strava.saveSession(null);
+    setStrava({});
+    setActivities([]);
+    setStatus("Disconnected.");
+  };
+
+  const useToken = async () => {
+    // Kept behind an "Advanced" disclosure for testers (§7.2), and honest that it dies in
+    // six hours because a pasted token has no refresh token attached.
+    const token = (strava.token || "").trim();
+    if (!token) { setStatus("Paste an access token first."); return; }
+    const session = { accessToken: token, refreshToken: "", expiresAt: 0, connected: true };
+    Strava.saveSession(session);
+    setStrava(session);
+    await loadActivities(session);
+  };
+
+  const pickActivity = async (a) => {
+    setStatus(`Loading ${a.name}…`);
+    const [detail, streams] = await Promise.all([
+      Strava.fetchActivity(strava, a.id),
+      Strava.fetchStreams(strava, a.id),
+    ]);
+    if (detail.session && detail.session !== strava) setStrava(detail.session);
+
+    const dd = detail.data ?? {};
+    const sd = streams.data ?? {};
+    const thin = (arr) => {
+      if (!arr?.length) return null;
+      const step = Math.max(1, Math.floor(arr.length / 200));
+      return arr.filter((_, i) => i % step === 0);
+    };
+
+    const splits = (dd.splits_metric ?? [])
+      .filter((sp) => sp.distance > 200)
+      .map((sp) => sp.moving_time / (sp.distance / 1000));
+
+    setAct({
+      id: a.id,
+      sport: sportFromStrava(a.sport_type || a.type),
+      name: a.name,
+      date: a.start_date_local || a.start_date,
+      distance: a.distance || 0,
+      time: a.moving_time,
+      elevation: a.total_elevation_gain || 0,
+      hr: a.average_heartrate ? Math.round(a.average_heartrate) : null,
+      hrMax: a.max_heartrate ? Math.round(a.max_heartrate) + 5 : 190,
+      calories: dd.calories ? Math.round(dd.calories) : null,
+      route: decodePolyline(dd.map?.polyline || a.map?.summary_polyline),
+      splits: splits.length ? splits : null,
+      elev: thin(sd.altitude?.data),
+      hrStream: thin(sd.heartrate?.data),
+      externalUrl: `https://www.strava.com/activities/${a.id}`,
+    });
+    setHyrox(null);
+    setShowStrava(false);
+    setStatus("");
+  };
+
   // ---- media ----
+  //
+  // HEIC: Safari decodes it natively, so an iPhone user is fine. Chrome and Firefox cannot,
+  // and the old message told everyone to change their camera settings — which is wrong
+  // advice on the browser where it already works. The message now names the browser's
+  // limitation instead of blaming the phone (§1.2 E8 is only half-fixed: a real decoder is
+  // still needed for Chrome).
   const onFile = (e) => {
-    const f = e.target.files?.[0]; if (!f) return;
+    const f = e.target.files?.[0];
+    if (!f) return;
     setError("");
     const url = URL.createObjectURL(f);
     if (media?.type === "video") media.el.pause();
+
     if (f.type.startsWith("video")) {
       const v = document.createElement("video");
       v.src = url; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto";
       v.onerror = () => setError("This video format could not be played here. Try an MP4 (H.264) or an iPhone MOV.");
-      v.onloadeddata = () => { v.play().catch(() => {}); setMedia({ type: "video", el: v, url, name: f.name }); setTemplate((t) => (["hud", "chase"].includes(t) ? t : "hud")); setTab("style"); };
+      v.onloadeddata = () => {
+        v.play().catch(() => {});
+        setMedia({ type: "video", el: v, url, name: f.name });
+        setTemplate((t) => (["hud", "chase"].includes(t) ? t : "hud"));
+        setTab("style");
+      };
       v.load();
-    } else if (f.type.startsWith("image")) {
+    } else if (f.type.startsWith("image") || /\.(heic|heif)$/i.test(f.name)) {
       const img = new Image();
-      img.onerror = () => setError("This image could not be opened. HEIC needs converting to JPG first (iPhone: Settings > Camera > Formats > Most Compatible).");
-      img.onload = () => { setMedia({ type: "image", el: img, url, name: f.name }); setAnimKey((k) => k + 1); };
+      img.onerror = () => {
+        const heic = /\.(heic|heif)$/i.test(f.name) || /heic|heif/i.test(f.type);
+        setError(
+          heic
+            ? "This browser cannot open HEIC photos. Safari can — or export the photo as JPEG from Photos."
+            : "This image could not be opened. Try a JPEG or PNG.",
+        );
+      };
+      img.onload = () => {
+        setMedia({ type: "image", el: img, url, name: f.name });
+        setAnimKey((k) => k + 1);
+      };
       img.src = url;
-    } else setError("Please choose a photo or a video file.");
+    } else {
+      setError("Please choose a photo or a video file.");
+    }
     e.target.value = "";
   };
 
@@ -473,60 +577,6 @@ export default function App() {
       setError(`Could not read that file: ${err.message}`);
     }
   };
-
-  // ---- Strava ----
-  const auth = (t) => ({ headers: { Authorization: `Bearer ${t}` } });
-  const fetchActivities = async (token) => {
-    setStatus("Loading your recent activities...");
-    try {
-      const r = await fetch("https://www.strava.com/api/v3/athlete/activities?per_page=40", auth(token));
-      if (r.status === 401) throw new Error("token rejected (expired, or missing activity:read scope)");
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const list = await r.json();
-      setActivities(list);
-      setStatus(list.length ? `${list.length} activities loaded. Tap one.` : "Connected, but no activities found.");
-      return true;
-    } catch (err) { setStatus(`Could not load from Strava: ${err.message}.`); return false; }
-  };
-  const startOAuth = () => {
-    if (!strava.clientId || !strava.clientSecret) { setStatus("Enter your Strava client ID and client secret first."); return; }
-    if (window.location.protocol === "file:") { setStatus("Sign-in needs the app served over http://localhost (see README), or paste an access token below."); return; }
-    store(strava);
-    const u = new URL("https://www.strava.com/oauth/authorize");
-    u.searchParams.set("client_id", strava.clientId); u.searchParams.set("response_type", "code");
-    u.searchParams.set("redirect_uri", window.location.origin + window.location.pathname);
-    u.searchParams.set("approval_prompt", "auto"); u.searchParams.set("scope", "read,activity:read,activity:read_all");
-    window.location.href = u.toString();
-  };
-  const useToken = async () => {
-    if (!strava.token?.trim()) { setStatus("Paste an access token first."); return; }
-    const next = { ...strava, token: strava.token.trim() };
-    if (await fetchActivities(next.token)) { next.connected = true; store(next); setStrava(next); }
-  };
-  const pickActivity = async (a) => {
-    setStatus(`Loading ${a.name}...`);
-    let splits = null, elev = null, hrStream = null, calories = null;
-    try {
-      const [dr, sr] = await Promise.all([
-        fetch(`https://www.strava.com/api/v3/activities/${a.id}`, auth(strava.token)),
-        fetch(`https://www.strava.com/api/v3/activities/${a.id}/streams?keys=altitude,heartrate&key_by_type=true`, auth(strava.token)),
-      ]);
-      if (dr.ok) { const dd = await dr.json(); splits = (dd.splits_metric || []).filter((s) => s.distance > 200).map((s) => s.moving_time / (s.distance / 1000)); calories = dd.calories ? Math.round(dd.calories) : null; }
-      if (sr.ok) {
-        const sd = await sr.json();
-        const thin = (arr) => { if (!arr?.length) return null; const step = Math.max(1, Math.floor(arr.length / 200)); return arr.filter((_, i) => i % step === 0); };
-        elev = thin(sd.altitude?.data); hrStream = thin(sd.heartrate?.data);
-      }
-    } catch {}
-    setAct({
-      id: a.id, sport: sportFromStrava(a.sport_type || a.type), name: a.name, date: a.start_date_local || a.start_date,
-      distance: a.distance || 0, time: a.moving_time, elevation: a.total_elevation_gain || 0,
-      hr: a.average_heartrate ? Math.round(a.average_heartrate) : null, hrMax: a.max_heartrate ? Math.round(a.max_heartrate) + 5 : act.hrMax || 190, calories,
-      route: decodePolyline(a.map?.summary_polyline), splits, elev, hrStream,
-    });
-    setShowStrava(false); setStatus("");
-  };
-  const disconnect = () => { store({}); setStrava({}); setActivities([]); setStatus("Disconnected."); };
 
   // ---- export (§9) ----
   const [imageFormat, setImageFormat] = useState("png");
@@ -1033,31 +1083,84 @@ export default function App() {
         <Modal onClose={() => setShowStrava(false)} title="Strava">
           {!strava.connected && (
             <>
-              <p className="small">Paste an access token from <strong>strava.com/settings/api</strong>. It lasts 6 hours.</p>
-              <div className="hms">
-                <input placeholder="Access token" value={strava.token || ""} onChange={(e) => setStrava({ ...strava, token: e.target.value })} data-testid="token-input" />
-                <button type="button" className="btn" onClick={useToken}>Load</button>
-              </div>
-              <hr />
-              <p className="muted small" style={{ marginTop: 10, marginBottom: 10 }}>Or use the demo run to start creating:</p>
+              {stravaConfig?.configured ? (
+                <>
+                  <p className="small">
+                    Sign in once. Stride Studio keeps the connection alive by itself, so it will not
+                    drop every six hours like the old version did.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn primary strava"
+                    onClick={connectStrava}
+                    data-testid="strava-signin"
+                  >
+                    Sign in with Strava
+                  </button>
+                </>
+              ) : (
+                <p className="small" data-testid="strava-unconfigured">
+                  Strava sign-in is not set up on this deployment yet. It needs the Strava client ID
+                  and secret as environment variables, and the callback domain on the Strava API app
+                  set to <strong>{typeof window !== "undefined" ? window.location.host : ""}</strong>.
+                  Until then you can paste a token below, but Strava expires those after six hours.
+                </p>
+              )}
+
+              <details style={{ marginTop: 12 }}>
+                <summary className="muted small">Advanced: paste an access token</summary>
+                <p className="muted small">
+                  From strava.com/settings/api. It stops working after six hours, and cannot renew
+                  itself, so this is for testing only.
+                </p>
+                <div className="hms">
+                  <input
+                    placeholder="Access token"
+                    value={strava.token || ""}
+                    onChange={(e) => setStrava({ ...strava, token: e.target.value })}
+                    data-testid="token-input"
+                  />
+                  <button type="button" className="btn" onClick={useToken}>Load</button>
+                </div>
+              </details>
             </>
           )}
+
           {strava.connected && (
             <div className="row">
-              <span className="small">Connected{strava.athlete ? ` as ${strava.athlete}` : ""}.</span>
-              <span><button type="button" className="link" onClick={() => fetchActivities(strava.token)}>Refresh</button>{" "}<button type="button" className="link" onClick={disconnect}>Disconnect</button></span>
+              <span className="small">
+                Connected{strava.athleteName ? ` as ${strava.athleteName}` : ""}.
+                {strava.refreshToken ? "" : " This is a pasted token, so it will expire."}
+              </span>
+              <span>
+                <button type="button" className="link" onClick={() => loadActivities(strava)}>Refresh</button>{" "}
+                <button type="button" className="link" onClick={disconnect}>Disconnect</button>
+              </span>
             </div>
           )}
+
           {status && <div className="muted small" style={{ marginTop: 8 }} data-testid="strava-status">{status}</div>}
+
           <div className="list">
             {activities.map((a) => (
-              <button key={a.id} type="button" onClick={() => pickActivity(a)}>
+              <button key={a.id} type="button" onClick={() => pickActivity(a)} data-testid={`strava-act-${a.id}`}>
                 <strong>{a.name}</strong>
-                <span className="muted small">{SPORTS[sportFromStrava(a.sport_type || a.type)]?.label}, {fmtDate(a.start_date_local)}{a.distance ? `, ${(a.distance / 1000).toFixed(1)} km` : ""}, {fmtTime(a.moving_time)}</span>
+                <span className="muted small">
+                  {SPORTS[sportFromStrava(a.sport_type || a.type)]?.label}, {fmtDate(a.start_date_local)}
+                  {a.distance ? `, ${(a.distance / 1000).toFixed(1)} km` : ""}, {fmtTime(a.moving_time)}
+                </span>
               </button>
             ))}
           </div>
-          <button type="button" className="link" style={{ marginTop: 10 }} onClick={() => { setAct(DEMO); setShowStrava(false); }}>Use demo run instead</button>
+
+          {/* §7.2 compliance: Strava requires a link back to the activity when showing its data. */}
+          {activities.length > 0 && (
+            <p className="muted small">Compatible with Strava.</p>
+          )}
+
+          <button type="button" className="link" style={{ marginTop: 10 }} onClick={() => { setAct(DEMO); setShowStrava(false); }}>
+            Use the demo run instead
+          </button>
         </Modal>
       )}
 
