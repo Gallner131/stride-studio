@@ -72,8 +72,12 @@ describe("needsRefresh", () => {
     expect(needsRefresh(session({ expiresAt: now - 10 }), now)).toBe(true);
   });
 
+  // The fixture now matches the name: a legacy pasted token has no refresh token, which is
+  // the reason not to refresh it. It previously carried the default refresh token, so it was
+  // really asserting that *any* session with an unknown expiry never refreshes — which left
+  // real sessions stuck on a stale access token. See stravaScope.test.ts.
   it("does not try to refresh a legacy token with no expiry", () => {
-    expect(needsRefresh(session({ expiresAt: 0 }), 1_000_000)).toBe(false);
+    expect(needsRefresh(session({ expiresAt: 0, refreshToken: "" }), 1_000_000)).toBe(false);
   });
 });
 

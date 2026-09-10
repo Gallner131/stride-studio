@@ -1177,6 +1177,26 @@ export default function App() {
             </div>
           )}
 
+          {/* A connection that was granted without activity permission cannot be repaired by
+              pressing Connect again: approval_prompt=auto makes Strava skip the consent
+              screen and reissue the same narrow token. This is the only way to be re-asked. */}
+          {strava.connected && !Strava.grantedActivityAccess(strava) && stravaConfig?.configured && (
+            <div className="row" data-testid="strava-scope-warning" style={{ marginTop: 8 }}>
+              <span className="small">
+                Strava did not grant permission to read your activities, so there is nothing to
+                import. Reconnect and tick “View data about your activities”.
+              </span>
+              <button
+                type="button"
+                className="btn primary strava"
+                data-testid="strava-regrant"
+                onClick={() => Strava.beginSignIn(stravaConfig, { force: true })}
+              >
+                Reconnect
+              </button>
+            </div>
+          )}
+
           {status && <div className="muted small" style={{ marginTop: 8 }} data-testid="strava-status">{status}</div>}
 
           <div className="list">
