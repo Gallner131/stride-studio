@@ -23,6 +23,22 @@ test("animation can actually be turned off, and stays off", async ({ page }) => 
   expect(await stageSnapshot(page)).toBe(c);
 });
 
+test("the preview settles and stays settled, with no photo and no interaction", async ({ page }) => {
+  await openApp(page);
+  await tab(page, "Designs");
+  await page.locator("[data-testid='newtpl-pb']").click();
+
+  // ANIM_SECONDS is 6. Give it a second's grace to finish and hold.
+  await page.waitForTimeout(7000);
+  const settled = await stageSnapshot(page);
+
+  // The old clock replayed every ANIM_SECONDS + 2.5 = 8.5 s, so a frame sampled here landed
+  // mid count-up and showed a different distance for the same activity. Crossing that
+  // boundary must now change nothing at all.
+  await page.waitForTimeout(4500);
+  expect(await stageSnapshot(page)).toBe(settled);
+});
+
 test("a pulsing element does not vanish when animation is off", async ({ page }) => {
   await openApp(page);
   await tab(page, "Add");

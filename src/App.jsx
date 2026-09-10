@@ -15,6 +15,7 @@ import { LookPicker } from "./ui/LookPicker.tsx";
 import { Suggestions } from "./ui/Suggestions.tsx";
 import { analysePhoto } from "./engine/photo.ts";
 import { handleShortcut, SHORTCUTS } from "./editor/shortcuts.ts";
+import { previewSettled, previewT } from "./editor/previewClock.ts";
 import { measureLayer } from "./engine/layers.ts";
 import { AlignBar } from "./ui/AlignBar.tsx";
 import { getLook, DEFAULT_LOOK_ID } from "./looks/index.ts";
@@ -365,11 +366,10 @@ export default function App() {
 
   const refreshDesigns = useCallback(async () => { setDesigns(await listDocs()); }, []);
 
-  const animT = () => {
-    const el = (performance.now() - startRef.current) / 1000;
-    const cycle = ANIM_SECONDS + 2.5; // animate, hold, replay
-    return Math.min(1, (el % cycle) / ANIM_SECONDS);
-  };
+  // Plays once, then holds. See src/editor/previewClock.ts for why it no longer replays.
+  const animElapsed = () => (performance.now() - startRef.current) / 1000;
+  const animT = () => previewT(animElapsed(), ANIM_SECONDS);
+  const animDone = () => previewSettled(animElapsed(), ANIM_SECONDS);
 
   const draw = useCallback(() => {
     const c = canvasRef.current; if (!c) return;
@@ -387,7 +387,10 @@ export default function App() {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
       renderLayers(ctx, st.doc, {
-        t: opts.animate ? animT() * 6 : Number.POSITIVE_INFINITY,
+        // Once settled, ask for t = Infinity rather than t = 6. Infinity is the settled
+        // state every preset agrees on (engine/anim.ts), and it is exactly what export and
+        // thumbnails pass — so a held preview is now pixel-identical to what you save.
+        t: opts.animate && !animDone() ? animT() * 6 : Number.POSITIVE_INFINITY,
         mode: "full",
         fields: st.fields,
         asset: st.assetResolver,
@@ -402,7 +405,14 @@ export default function App() {
 
   useEffect(() => {
     let alive = true, raf = 0;
-    const loop = () => { if (!alive) return; draw(); raf = requestAnimationFrame(loop); };
+    // Video keeps its own clock, so it loops for as long as it plays. A still design stops
+    // requesting frames the moment the animation settles — otherwise the phone redraws an
+    // identical frame sixty times a second for the life of the tab.
+    const loop = () => {
+      if (!alive) return;
+      draw();
+      if (media?.type === "video" || !animDone()) raf = requestAnimationFrame(loop);
+    };
     if (media?.type === "video" || opts.animate) loop(); else draw();
     return () => { alive = false; cancelAnimationFrame(raf); };
   }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look]);
