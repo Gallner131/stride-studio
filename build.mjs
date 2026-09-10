@@ -3,7 +3,7 @@
 // `node build.mjs`        one production build
 // `node build.mjs --dev`  rebuild on change and serve on http://127.0.0.1:4173
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
 
 const DEV = process.argv.includes("--dev");
@@ -29,13 +29,51 @@ async function bundle() {
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stride Studio</title>
 <meta name="theme-color" content="#161616">
+<meta name="description" content="Turn a run or workout into a post you're proud of.">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon.svg">
 <style>${css}</style></head>
 <body><div id="root"></div>
 <script>${js.replace(/<\/script/g, "<\\/script")}</script>
 </body></html>`;
   mkdirSync("dist", { recursive: true });
   writeFileSync("dist/index.html", html);
-  console.log("dist/index.html", (html.length / 1024).toFixed(0), "KB");
+
+  // --- PWA (§9.5) -----------------------------------------------------------
+  // The manifest, worker and icon sit alongside the single-file app, so the AirDrop-able
+  // index.html still works entirely on its own (§1.3).
+  const manifest = {
+    name: "Stride Studio",
+    short_name: "Stride",
+    description: "Turn a run or workout into a post you're proud of.",
+    start_url: "./index.html",
+    scope: "./",
+    display: "standalone",
+    orientation: "portrait",
+    background_color: "#141414",
+    theme_color: "#161616",
+    icons: [
+      { src: "./icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+      { src: "./icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+    ],
+  };
+  writeFileSync("dist/manifest.webmanifest", JSON.stringify(manifest, null, 2));
+
+  // One scalable icon, drawn here so there is no binary asset to keep in sync.
+  writeFileSync(
+    "dist/icon.svg",
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#141414"/>
+  <path d="M112 352 C112 352 168 208 256 208 C344 208 344 128 400 128" fill="none"
+        stroke="#D8FF3A" stroke-width="44" stroke-linecap="round"/>
+  <circle cx="112" cy="352" r="30" fill="#FFFFFF"/>
+  <circle cx="400" cy="128" r="30" fill="#D8FF3A"/>
+</svg>`,
+  );
+
+  writeFileSync("dist/sw.js", readFileSync("src/pwa/sw.js", "utf8"));
+
+  console.log("dist/index.html", (html.length / 1024).toFixed(0), "KB  + manifest, sw.js, icon.svg");
 }
 
 await bundle();

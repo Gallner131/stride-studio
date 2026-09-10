@@ -222,3 +222,4 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
   background: #111; border: 1px solid #2a2a2c; font-family: inherit; font-size: 12px; color: #d8ff3a;
 }
 .chip { position: relative; overflow: hidden; }
+.toast.update { border: 1px solid #d8ff3a; color: #d8ff3a; cursor: pointer; }

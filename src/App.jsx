@@ -20,6 +20,15 @@ import { AlignBar } from "./ui/AlignBar.tsx";
 import { getLook, DEFAULT_LOOK_ID } from "./looks/index.ts";
 import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
 import { importedToActivity, parseTrackFile } from "./data/gpx.ts";
+import {
+  copyImageToClipboard,
+  cropCanvas,
+  exportFileName,
+  stickerCrop,
+  toBlob as canvasToBlob,
+} from "./export/image.ts";
+import { canUseWebCodecs, exportVideo, MAX_CLIP_SECONDS } from "./export/video.ts";
+import { registerServiceWorker } from "./pwa/register.ts";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer, newTextLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
@@ -146,6 +155,7 @@ export default function App() {
   const [designs, setDesigns] = useState([]);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [importNotes, setImportNotes] = useState([]);
+  const [quality, setQuality] = useState("hd"); // 720 | 1080 (hd) | 2x
   const [storageNote, setStorageNote] = useState("");
 
   // Undo/redo comes from zundo's temporal store (§6.1).
@@ -510,14 +520,37 @@ export default function App() {
   };
   const disconnect = () => { store({}); setStrava({}); setActivities([]); setStatus("Disconnected."); };
 
-  // ---- export ----
-  const [quality, setQuality] = useState("hd"); // hd = 1080 wide, fast = 720 wide (older phones)
-  const mkCanvas = () => { setFormat(format); const k = quality === "fast" ? 2 / 3 : 1; const c = document.createElement("canvas"); c.width = Math.round(W * k); c.height = Math.round(H * k); c.getContext("2d").scale(k, k); return c; };
-  const toBlob = (c, type) => new Promise((res) => c.toBlob(res, type));
-  const fileName = (ext) => `${(act.name || "activity").replace(/[^\w-]+/g, "-").toLowerCase()}-${fmtDist(derive(act, opts).dist)}${opts.units}.${ext}`;
+  // ---- export (§9) ----
+  const [imageFormat, setImageFormat] = useState("png");
+  const [videoPath, setVideoPath] = useState(null);
 
+  useEffect(() => {
+    canUseWebCodecs(1080, 1920).then((ok) => setVideoPath(ok ? "webcodecs" : "mediarecorder"));
+  }, []);
+
+  // §9.5: opens offline, and says so rather than silently swapping under the user.
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => { registerServiceWorker(() => setUpdateReady(true)); }, []);
+
+  const exportScale = () => (quality === "fast" ? 720 / FORMATS[format].w : quality === "2x" ? 2 : 1);
+
+  const mkCanvas = () => {
+    setFormat(format);
+    const k = exportScale();
+    const c = document.createElement("canvas");
+    c.width = Math.round(W * k);
+    c.height = Math.round(H * k);
+    c.getContext("2d").scale(k, k);
+    return c;
+  };
+
+  const fileName = (ext) =>
+    exportFileName(effectiveAct.name, d.hasDist ? fmtDist(d.dist) : null, opts.units, effectiveAct.date, ext);
+
+  /** Legacy template pass plus the document layers, at `t` seconds. */
   const drawFull = (ctx, mode, t = Number.POSITIVE_INFINITY) => {
-    renderFrame(ctx, media, effectiveAct, template, opts, 1, 1, mode);
+    const animT2 = t === Number.POSITIVE_INFINITY ? 1 : Math.min(1, t / ANIM_SECONDS);
+    renderFrame(ctx, media, effectiveAct, template, opts, 1, animT2, mode);
     if (doc.layers.length) {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
@@ -530,60 +563,82 @@ export default function App() {
     try {
       const c = mkCanvas();
       drawFull(c.getContext("2d"), mode);
-      const blob = await toBlob(c, "image/png");
-      if (!blob) throw new Error("canvas returned nothing");
-      setResult({ url: URL.createObjectURL(blob), blob, kind: "image", ext: "png", mode });
-    } catch (e) { setError(`Export failed: ${e.message}`); }
-  };
 
-  const record = async (drawFrame, durationMs, videoEl) => {
-    if (typeof MediaRecorder === "undefined") throw new Error("this browser cannot record video (use Chrome, Edge, Firefox or Safari 14.1+)");
-    const c = mkCanvas(); const ctx = c.getContext("2d");
-    // Manual frame capture (requestFrame) is far more reliable than the automatic 30fps capture, especially while a source video is decoding.
-    let stream = c.captureStream(0);
-    let track = stream.getVideoTracks()[0];
-    const manual = track && typeof track.requestFrame === "function";
-    if (!manual) { stream = c.captureStream(30); track = stream.getVideoTracks()[0]; }
-    if (videoEl) { try { const vs = videoEl.captureStream ? videoEl.captureStream() : videoEl.mozCaptureStream?.(); vs?.getAudioTracks().forEach((tr) => stream.addTrack(tr)); } catch {} }
-    const mime = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) || "";
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : undefined);
-    const chunks = []; rec.ondataavailable = (e) => { if (e.data?.size) chunks.push(e.data); };
-    const stopped = new Promise((res) => (rec.onstop = res));
-    const t0 = performance.now(); let running = true;
-    const tick = () => { if (!running) return; const el = performance.now() - t0; drawFrame(ctx, el); if (manual) track.requestFrame(); setProgressPct(Math.min(100, Math.round((el / durationMs) * 100))); requestAnimationFrame(tick); };
-    rec.start(250); tick();
-    if (videoEl) { await videoEl.play(); await new Promise((res) => { const h = () => { videoEl.removeEventListener("ended", h); res(); }; videoEl.addEventListener("ended", h); }); }
-    else await new Promise((res) => setTimeout(res, durationMs));
-    drawFrame(ctx, durationMs); if (manual) track.requestFrame(); await new Promise((r) => setTimeout(r, 250));
-    running = false; rec.stop(); await stopped;
-    const type = rec.mimeType || mime || "video/webm";
-    return { blob: new Blob(chunks, { type }), ext: type.includes("mp4") ? "mp4" : "webm" };
-  };
-
-  const exportVideo = async () => {
-    setExporting("video"); setError(""); setProgressPct(0);
-    const v = media?.type === "video" ? media.el : null;
-    try {
-      let out;
-      if (v) {
-        v.loop = false; v.pause(); v.currentTime = 0;
-        await new Promise((res) => { const h = () => { v.removeEventListener("seeked", h); res(); }; v.addEventListener("seeked", h); setTimeout(res, 800); });
-        out = await record((ctx) => {
-          renderFrame(ctx, media, act, template, opts, v.duration ? v.currentTime / v.duration : 0, Math.min(1, v.currentTime / ANIM_SECONDS));
-          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: v.currentTime, mode: "full", fields, asset: assetResolver, hyrox, series, look }); ctx.restore(); }
-        }, (v.duration || 5) * 1000, v);
-        v.loop = true; v.play().catch(() => {});
-      } else {
-        const dur = (ANIM_SECONDS + 1.5) * 1000;
-        out = await record((ctx, el) => {
-          renderFrame(ctx, media, act, template, { ...opts, animate: true }, 1, Math.min(1, el / 1000 / ANIM_SECONDS));
-          if (doc.layers.length) { ctx.save(); ctx.scale(W / 1000, W / 1000); renderLayers(ctx, doc, { t: el / 1000, mode: "full", fields, asset: assetResolver, hyrox, series, look }); ctx.restore(); }
-        }, dur, null);
+      let out = c;
+      // §9.2: a sticker is cropped tight to what it contains, not a full transparent frame.
+      if (mode === "sticker" && doc.layers.length > 0) {
+        const measureCtx = document.createElement("canvas").getContext("2d");
+        const env = { ctx: measureCtx, fields, asset: assetResolver, anim: { opacity: 1, dx: 0, dy: 0, scale: 1, progress: 1 }, hyrox, series };
+        const placed = layoutDoc(doc, env, look).placed.filter((pl) => {
+          const layer = doc.layers.find((l) => l.id === pl.id);
+          return layer?.visible && layer?.sticker;
+        });
+        const canvasUnits = { w: 1000, h: (1000 * FORMATS[format].h) / FORMATS[format].w };
+        const rect = stickerCrop(placed, canvasUnits, exportScale());
+        if (rect) out = cropCanvas(c, rect, (W / 1000) * exportScale());
       }
-      setResult({ url: URL.createObjectURL(out.blob), blob: out.blob, kind: "video", ext: out.ext, mode: "full" });
-    } catch (e) { setError(`Video export failed: ${e.message}`); }
-    finally { setExporting(""); }
+
+      const ext = mode === "sticker" ? "png" : imageFormat;
+      const blob = await canvasToBlob(out, ext);
+      if (!blob) throw new Error("canvas returned nothing");
+      setResult({ url: URL.createObjectURL(blob), blob, kind: "image", ext, mode });
+    } catch (e) {
+      setError(`Export failed: ${e.message}`);
+    }
   };
+
+  const exportVideoNow = async () => {
+    setExporting("video");
+    setError("");
+    setProgressPct(0);
+
+    const clip = media?.type === "video" ? media.el : null;
+    if (clip && clip.duration > MAX_CLIP_SECONDS) {
+      setExporting("");
+      setError(`This video is ${Math.round(clip.duration)} seconds. Trim it to ${MAX_CLIP_SECONDS} seconds or under in your Photos app, or export a still image instead.`);
+      return;
+    }
+
+    const k = exportScale();
+    const duration = clip?.duration || ANIM_SECONDS + 1.5;
+
+    try {
+      if (clip) { clip.loop = false; clip.pause(); }
+      const out = await exportVideo({
+        width: Math.round(W * k),
+        height: Math.round(H * k),
+        fps: 30,
+        duration,
+        bitrate: 10_000_000,
+        onProgress: (done, total) => setProgressPct(Math.round((done / total) * 100)),
+        drawFrame: (ctx, t) => {
+          ctx.save();
+          ctx.scale(k, k);
+          if (clip) {
+            // Frame-accurate: seek the clip rather than playing it (§9.3).
+            try { clip.currentTime = Math.min(clip.duration, t); } catch {}
+            renderFrame(ctx, media, effectiveAct, template, opts, clip.duration ? t / clip.duration : 0, Math.min(1, t / ANIM_SECONDS), "full");
+          } else {
+            renderFrame(ctx, media, effectiveAct, template, { ...opts, animate: true }, 1, Math.min(1, t / ANIM_SECONDS), "full");
+          }
+          if (doc.layers.length) {
+            ctx.scale(W / 1000, W / 1000);
+            renderLayers(ctx, doc, { t, mode: "full", fields, asset: assetResolver, hyrox, series, look });
+          }
+          ctx.restore();
+        },
+      });
+
+      setResult({ url: URL.createObjectURL(out.blob), blob: out.blob, kind: "video", ext: out.ext, mode: "full", path: out.path });
+      say(out.path === "webcodecs" ? `Encoded ${out.frames} frames` : "Recorded in real time");
+    } catch (e) {
+      setError(`Video export failed: ${e.message}`);
+    } finally {
+      if (clip) { clip.loop = true; clip.play().catch(() => {}); }
+      setExporting("");
+    }
+  };
+
 
   const share = async () => {
     if (!result) return;
@@ -875,11 +930,29 @@ export default function App() {
 
           <div className="exports">
             <button type="button" className="btn primary" onClick={() => exportImage("full")} disabled={!!exporting} data-testid="export-image">Save image</button>
-            <button type="button" className="btn primary" onClick={exportVideo} disabled={!!exporting} data-testid="export-video">{exporting === "video" ? `Recording ${progressPct}%` : media?.type === "video" ? "Save video" : "Save animated video"}</button>
+            <button type="button" className="btn primary" onClick={exportVideoNow} disabled={!!exporting} data-testid="export-video">{exporting === "video" ? `Recording ${progressPct}%` : media?.type === "video" ? "Save video" : "Save animated video"}</button>
             <button type="button" className="btn" onClick={() => exportImage("sticker")} disabled={!!exporting} data-testid="export-sticker">Save sticker (transparent)</button>
           </div>
-          <div className="row" style={{ marginTop: 10 }}><span className="muted small">Export size</span><Seg value={quality} options={[["hd", `${FORMATS[format].w}×${FORMATS[format].h}`], ["fast", `${Math.round(FORMATS[format].w * 2 / 3)}×${Math.round(FORMATS[format].h * 2 / 3)} (faster)`]]} onChange={setQuality} /></div>
-          <p className="muted small"> Video records in real time, so keep this tab in front. The sticker is just the overlay, for dropping onto any Story.</p>
+          <div className="row" style={{ marginTop: 10 }}>
+            <span className="muted small">Export size</span>
+            <Seg
+              value={quality}
+              options={[["fast", "720"], ["hd", String(FORMATS[format].w)], ["2x", String(FORMATS[format].w * 2)]]}
+              onChange={setQuality}
+            />
+          </div>
+          <div className="row">
+            <span className="muted small">Image format</span>
+            <Seg value={imageFormat} options={[["png", "PNG"], ["jpeg", "JPEG (smaller)"]]} onChange={setImageFormat} />
+          </div>
+          <p className="muted small" data-testid="video-note">
+            {videoPath === "webcodecs"
+              ? "Video is encoded frame by frame, so it does not matter if you switch apps while it runs."
+              : videoPath === "mediarecorder"
+                ? "This browser records video in real time, so keep this screen in front until it finishes."
+                : "Checking how this browser can encode video…"}
+            {" The sticker is cropped tight to the overlay, for dropping onto any Story."}
+          </p>
         </section>
       </div>
 
@@ -924,6 +997,19 @@ export default function App() {
             {canShareFiles && <button type="button" className="btn primary" onClick={share} data-testid="share">Share to Instagram, Messages...</button>}
             <a className="btn primary" href={result.url} download={fileName(result.ext)}>Download {result.ext.toUpperCase()}</a>
             <button type="button" className="btn" onClick={copyCaption}>Copy caption</button>
+            {result.kind === "image" && (
+              <button
+                type="button"
+                className="btn"
+                data-testid="copy-image"
+                onClick={async () => {
+                  const ok = await copyImageToClipboard(result.blob);
+                  say(ok ? "Image copied — paste it into your Story" : "Copying images is not available in this browser");
+                }}
+              >
+                Copy image
+              </button>
+            )}
           </div>
           <p className="muted small" style={{ marginTop: 10 }}>
             {canShareFiles ? "Share opens your phone's share sheet: pick Instagram, then Story or Post. " : "On a phone, press and hold the preview to save it to your camera roll. "}
@@ -942,6 +1028,11 @@ export default function App() {
             ))}
           </ul>
         </Modal>
+      )}
+      {updateReady && (
+        <button type="button" className="toast update" onClick={() => window.location.reload()}>
+          New version — tap to reload
+        </button>
       )}
       {toast && <div className="toast">{toast}</div>}
     </div>
