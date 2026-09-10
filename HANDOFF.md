@@ -14,8 +14,12 @@ sentence and offer to skip ahead.**
 
 ## State as of handoff
 
-- Branch `phase0-stabilise`, pushed to GitHub. **Production runs this branch**, deployed via
-  `vercel deploy --prod` (Vercel is NOT git-connected, so pushing does not deploy).
+- Branch `phase0-stabilise`, pushed to GitHub. **Production runs this branch.**
+- **Vercel IS git-connected** — an earlier version of this file said it was not, which was
+  wrong. Pushing a branch builds a preview automatically, aliased by branch name:
+  `https://stride-studio-git-<branch>-create-team-c1c6f604.vercel.app`. Verified by pushing
+  `phase8-1-canvas-bugs` and watching the preview appear ~50 s later. What promotes a build
+  to production has not been re-verified; `vercel deploy --prod` still does it explicitly.
 - Live: https://stride-studio-sooty.vercel.app
 - **Strava is fully configured and working.** Client ID `276637`, callback domain already
   correct, `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` / `APP_ORIGIN` set in Vercel
