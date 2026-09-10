@@ -35,6 +35,12 @@ export function animAt(layer: Layer, index: number, t: number, reducedMotion = f
   const { anim } = layer;
   if (anim.preset === "none" || reducedMotion) return STATIC_ANIM;
 
+  // "Animation off", thumbnails and image export all render at t = Infinity, meaning "the
+  // settled final frame". The looping presets compute a phase from t, and Math.sin(Infinity)
+  // is NaN — which becomes ctx.scale(NaN, NaN) and makes the layer VANISH. STATIC_ANIM is
+  // the settled state for every preset, so return it directly.
+  if (!Number.isFinite(t)) return STATIC_ANIM;
+
   const delay = anim.delay === "auto" ? autoDelay(index) : anim.delay;
   const duration = Math.max(0.001, anim.duration);
   const raw = clamp01((t - delay) / duration);

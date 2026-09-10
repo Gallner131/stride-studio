@@ -783,6 +783,15 @@ export default function App() {
             <button type="button" className="btn" onClick={() => undo()} disabled={!canUndo} title="Undo" data-testid="undo">↶</button>
             <button type="button" className="btn" onClick={() => redo()} disabled={!canRedo} title="Redo" data-testid="redo">↷</button>
             <button type="button" className={`btn ${safeZones ? "on" : ""}`} onClick={toggleSafeZones} title="Instagram safe zones" data-testid="safe-zones">Safe zones</button>
+            <button
+              type="button"
+              className={`btn ${opts.animate ? "on" : ""}`}
+              onClick={() => set("animate", !opts.animate)}
+              title={opts.animate ? "Animation on — tap for a still design" : "Animation off"}
+              data-testid="toggle-animate"
+            >
+              {opts.animate ? "Animated" : "Still"}
+            </button>
             {selection.length > 0 && (
               <button type="button" className="btn" onClick={clearSelection} data-testid="deselect">
                 Deselect{selection.length > 1 ? ` (${selection.length})` : ""}

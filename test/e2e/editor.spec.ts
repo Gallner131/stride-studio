@@ -157,6 +157,7 @@ test("dragging a multi-selection keeps its internal spacing", async ({ page }) =
   await selectAllViaKeyboard(page);
 
   const overlay = page.locator("[data-testid='overlay']");
+  await overlay.scrollIntoViewIfNeeded();
   const box = await overlay.boundingBox();
   if (!box) throw new Error("no overlay box");
 

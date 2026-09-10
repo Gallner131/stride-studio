@@ -63,6 +63,7 @@ test("dragging an element moves that element, not the whole design (§1.1 A2)", 
   const layerBefore = await layerGeometry(page);
 
   const overlay = page.locator("[data-testid='overlay']");
+  await overlay.scrollIntoViewIfNeeded();
   const box = await overlay.boundingBox();
   if (!box) throw new Error("no overlay box");
   const cx = box.x + box.width / 2;
@@ -96,6 +97,7 @@ test("undo and redo a drag as one step (§6.1)", async ({ page }) => {
   await addText(page, "Undo me");
 
   const overlay = page.locator("[data-testid='overlay']");
+  await overlay.scrollIntoViewIfNeeded();
   const box = await overlay.boundingBox();
   if (!box) throw new Error("no overlay box");
 
