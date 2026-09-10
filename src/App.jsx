@@ -254,6 +254,12 @@ export default function App() {
     [fields, assetResolver, hyrox, series],
   );
 
+  // Hand the measurer to the store, so a newly added object is placed by its real size
+  // rather than a guess — see src/model/placement.ts.
+  useEffect(() => {
+    useEditor.getState().setMeasure(measure);
+  }, [measure]);
+
   const canvasRef = useRef(null);
   const stateRef = useRef({});
   stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look };

@@ -2,7 +2,8 @@
 import { produce } from "immer";
 import { temporal } from "zundo";
 import { create } from "zustand";
-import { newDocument, placeNewLayer } from "../model/defaults";
+import { newDocument } from "../model/defaults";
+import { placeNewLayer } from "../model/placement";
 import { type AlignEdge, alignLayers, distributeLayers, type Measure, reflowLayers } from "../model/reflow";
 import type { Document, Layer, LayerType } from "../model/types";
 
@@ -15,6 +16,9 @@ export interface EditorState {
   mode: "quick" | "studio";
   editingTextId: string | null;
   safeZones: boolean;
+  /** Set by the app once it has a canvas, so new objects can be placed by their real size. */
+  measure: Measure | null;
+  setMeasure: (measure: Measure) => void;
 
   // --- document
   setDoc: (doc: Document) => void;
@@ -65,6 +69,7 @@ export const useEditor = create<EditorState>()(
       mode: "quick",
       editingTextId: null,
       safeZones: false,
+      measure: null,
 
       setDoc: (doc) => set({ doc, selection: [] }),
 
@@ -132,8 +137,13 @@ export const useEditor = create<EditorState>()(
           }),
         })),
 
+      setMeasure: (measure) => set({ measure }),
+
       addLayer: (layer) => {
-        const placed = placeNewLayer(get().doc, layer);
+        // Placement needs real sizes to keep objects off each other, and only the app has a
+        // canvas to measure text against. Without one it falls back to a rough estimate,
+        // which is enough for tests but not for a design.
+        const placed = placeNewLayer(get().doc, layer, get().measure ?? undefined);
         set((s) => ({
           doc: produce(s.doc, (d) => {
             d.layers.push(placed);
