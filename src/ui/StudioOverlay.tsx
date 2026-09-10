@@ -11,6 +11,7 @@ import type { FieldTable } from "../model/bindings";
 import { resolveBindings } from "../model/bindings";
 import { CANVAS_W, canvasHeight } from "../model/defaults";
 import type { Layer, TextLayer } from "../model/types";
+import { SelectionBar } from "./SelectionBar";
 
 /** A shared measuring context, so layout does not need the visible canvas. */
 function measuringContext(): CanvasRenderingContext2D {
@@ -25,6 +26,8 @@ function measuringContext(): CanvasRenderingContext2D {
 export interface StudioOverlayProps {
   fields: FieldTable;
   asset: (assetId: string) => CanvasImageSource | null;
+  /** Opens the full Inspector, for everything the selection toolbar deliberately omits. */
+  onOpenInspector?: () => void;
 }
 
 /**
@@ -33,7 +36,7 @@ export interface StudioOverlayProps {
  * Sits above the design canvas and owns selection, drag, resize, rotate and inline text
  * editing. The render engine never draws handles or guides; they live here (§5.2 step 5).
  */
-export function StudioOverlay({ fields, asset }: StudioOverlayProps) {
+export function StudioOverlay({ fields, asset, onOpenInspector }: StudioOverlayProps) {
   const doc = useEditor((s) => s.doc);
   const selection = useEditor((s) => s.selection);
   const safeZones = useEditor((s) => s.safeZones);
@@ -41,7 +44,6 @@ export function StudioOverlay({ fields, asset }: StudioOverlayProps) {
   const select = useEditor((s) => s.select);
   const toggleSelect = useEditor((s) => s.toggleSelect);
   const clearSelection = useEditor((s) => s.clearSelection);
-  const removeLayer = useEditor((s) => s.removeLayer);
   const patchLayer = useEditor((s) => s.patchLayer);
   const setMode = useEditor((s) => s.setMode);
   const setEditingText = useEditor((s) => s.setEditingText);
@@ -122,14 +124,6 @@ export function StudioOverlay({ fields, asset }: StudioOverlayProps) {
     const [x, y] = toCanvas(e.clientX, e.clientY);
     const upp = unitsPerPx();
     const result = beginGesture(doc, layout, selection, x, y, upp);
-
-    // The × handle. Checked before the empty-canvas branch, which would otherwise read a
-    // press that starts no drag and selects nothing as a tap on the background.
-    if (result.remove) {
-      removeLayer(result.remove);
-      setGuides([]);
-      return;
-    }
 
     if (!result.drag && result.select === null) {
       // Empty canvas: deselect and begin a marquee.
@@ -281,6 +275,15 @@ export function StudioOverlay({ fields, asset }: StudioOverlayProps) {
           if (next) select([next]);
         }}
       />
+      {/* Controls come to the selection, rather than the user going to find them. Hidden
+          while a drag or a marquee is in flight, so it never sits under the thumb. */}
+      {!marquee && editingTextId === null && (
+        <SelectionBar
+          placed={layout.placed.filter((p) => selection.includes(p.id))}
+          format={doc.format}
+          onOpenInspector={() => onOpenInspector?.()}
+        />
+      )}
       {editingLayer?.type === "text" && (
         <InlineTextEditor
           layer={editingLayer}

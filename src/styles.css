@@ -243,7 +243,13 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
   background: #111; border: 1px solid #2a2a2c; font-family: inherit; font-size: 12px; color: #d8ff3a;
 }
 .chip { position: relative; overflow: hidden; }
-.toast.update { border: 1px solid #d8ff3a; color: #d8ff3a; cursor: pointer; }
+/* The update banner was #d8ff3a text on .toast's #f2f2f2 background — lime on white, about
+   1.03:1, which is invisible. Nobody ever saw it, so nobody ever reloaded, so shipped fixes
+   looked like nothing had changed. Dark pill, accent border, readable. */
+.toast.update {
+  background: #141414; color: #d8ff3a; border: 1px solid #d8ff3a;
+  font-weight: 600; cursor: pointer; padding: 12px 18px;
+}
 
 /* ---------- My designs ---------- */
 .designs { display: flex; flex-direction: column; gap: 8px; }
@@ -263,3 +269,35 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
   background: #1c1c1e; border: 1px solid #ff5a5f; border-radius: 10px; padding: 12px;
   font-size: 12px; white-space: pre-wrap; word-break: break-word; margin: 0; color: #ff8a80;
 }
+
+/* ---------- Selection toolbar (§6.5) ---------- */
+/* Controls that used to live behind a tab and a collapsed section, brought to the thing you
+   have selected. Positioned over the stage in percentages so it tracks the design at any
+   display size. */
+.selbar {
+  position: absolute; z-index: 4; display: flex; align-items: center; gap: 4px;
+  padding: 4px; border-radius: 12px;
+  background: rgba(20, 20, 20, 0.92); border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+.selbar-btn, .selbar-swatch {
+  width: 34px; height: 34px; border-radius: 9px; cursor: pointer;
+  background: none; border: 0; color: #f2f2f2; font-size: 15px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.selbar-btn:hover, .selbar-swatch:hover { background: #2f2f31; }
+.selbar-btn.danger { color: #ff5a5f; }
+.selbar-color { position: relative; display: flex; }
+.selbar-swatch { border: 2px solid rgba(255, 255, 255, 0.5); }
+.selbar-palette {
+  position: absolute; top: calc(100% + 6px); left: 0; display: flex; gap: 4px; padding: 6px;
+  border-radius: 10px; background: #141414; border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.selbar-chip {
+  width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.35); background: #2a2a2c;
+  color: #f2f2f2; font-size: 11px; font-weight: 700;
+}
+.selbar-native { width: 30px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer; }

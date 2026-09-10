@@ -62,50 +62,6 @@ test("layers can be dragged into a new order", async ({ page }) => {
   expect(await order()).toEqual(["Alpha", "Beta"]);
 });
 
-// The × on the selection frame — removal without leaving the canvas at all.
-test("tapping the delete handle removes the element", async ({ page }) => {
-  await openApp(page);
-  await addText(page, "Gone");
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(1);
-
-  // Locate the handle by the pixels it actually draws, rather than a hardcoded coordinate
-  // or a test-only hook in the app. The disc is #FF5A5F at full alpha; the safe-zone tint
-  // shares the hue but is drawn at 0.10/0.55 alpha, so requiring a > 200 cannot confuse them.
-  const spot = await page.evaluate(() => {
-    const c = document.querySelector<HTMLCanvasElement>("[data-testid='overlay']");
-    if (!c) return null;
-    const ctx = c.getContext("2d");
-    if (!ctx) return null;
-    const { data } = ctx.getImageData(0, 0, c.width, c.height);
-    let sx = 0;
-    let sy = 0;
-    let n = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i] ?? 0;
-      const g = data[i + 1] ?? 0;
-      const b = data[i + 2] ?? 0;
-      const a = data[i + 3] ?? 0;
-      if (a > 200 && r > 230 && g > 60 && g < 120 && b > 65 && b < 125) {
-        const p = i / 4;
-        sx += p % c.width;
-        sy += Math.floor(p / c.width);
-        n++;
-      }
-    }
-    if (n === 0) return null;
-    const rect = c.getBoundingClientRect();
-    return { x: (sx / n / c.width) * rect.width, y: (sy / n / c.height) * rect.height };
-  });
-  expect(spot, "the delete handle should be drawn on the selection").not.toBeNull();
-
-  const overlay = page.locator("[data-testid='overlay']");
-  await overlay.click({
-    position: { x: (spot as { x: number; y: number }).x, y: (spot as { x: number; y: number }).y },
-  });
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(0);
-});
-
 test("deleting from the toolbar can be undone", async ({ page }) => {
   await openApp(page);
   await addText(page, "Second thoughts");

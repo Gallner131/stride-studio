@@ -10,19 +10,10 @@ export const ACCENT = "#D8FF3A";
 export const HANDLE_DRAW_PX = 12;
 export const HANDLE_HIT_PX = 44;
 
-export type HandleId = "nw" | "ne" | "se" | "sw" | "rot" | "del";
+export type HandleId = "nw" | "ne" | "se" | "sw" | "rot";
 
 /** How far above the box the rotation handle floats, in canvas units. */
 const LIFT = 56;
-
-/**
- * How far up and left of the top-left corner the delete handle sits.
- *
- * It has to clear the `nw` resize corner's hit target, which is HANDLE_HIT_PX/2 = 22 CSS px
- * in every direction — about 66 canvas units on a phone. A diagonal offset of 80 puts both
- * axes outside that box, so a thumb aimed at one cannot land on the other.
- */
-const DEL_OFFSET = 80;
 
 export interface HandlePoint {
   id: HandleId;
@@ -49,10 +40,6 @@ export function handlePoints(p: Placed, originOx: number, originOy: number): Han
   const [sex, sey] = rot(p.box.x + p.box.w, p.box.y + p.box.h);
   const [swx, swy] = rot(p.box.x, p.box.y + p.box.h);
   const [rx, ry] = rot(p.box.x + p.box.w / 2, p.box.y - LIFT);
-  // Delete floats above the top-LEFT corner, opposite the rotation handle at top-centre.
-  // Both lift clear of the box so neither competes with a resize corner, and they sit far
-  // enough apart that a 44 px thumb target cannot land on both.
-  const [dx2, dy2] = rot(p.box.x - DEL_OFFSET, p.box.y - DEL_OFFSET);
 
   return [
     { id: "nw", x: nwx, y: nwy },
@@ -60,7 +47,6 @@ export function handlePoints(p: Placed, originOx: number, originOy: number): Han
     { id: "se", x: sex, y: sey },
     { id: "sw", x: swx, y: swy },
     { id: "rot", x: rx, y: ry },
-    { id: "del", x: dx2, y: dy2 },
   ];
 }
 
@@ -154,27 +140,6 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, input: OverlayInput):
           ctx.arc(h.x, h.y, size * 0.55, 0, Math.PI * 2);
           ctx.fillStyle = ACCENT;
           ctx.fill();
-        } else if (h.id === "del") {
-          // A red disc with a cross. Deliberately not the accent colour: it is the one
-          // handle that destroys something, and it should not look like the others.
-          const r = size * 0.62;
-          ctx.beginPath();
-          ctx.arc(h.x, h.y, r, 0, Math.PI * 2);
-          ctx.fillStyle = "#FF5A5F";
-          ctx.fill();
-
-          ctx.save();
-          ctx.strokeStyle = "#141414";
-          ctx.lineWidth = 2.2 * unitsPerPx;
-          ctx.lineCap = "round";
-          const arm = r * 0.45;
-          ctx.beginPath();
-          ctx.moveTo(h.x - arm, h.y - arm);
-          ctx.lineTo(h.x + arm, h.y + arm);
-          ctx.moveTo(h.x + arm, h.y - arm);
-          ctx.lineTo(h.x - arm, h.y + arm);
-          ctx.stroke();
-          ctx.restore();
         } else {
           ctx.fillStyle = "#141414";
           ctx.fillRect(h.x - size / 2, h.y - size / 2, size, size);
@@ -217,16 +182,8 @@ export function hitHandle(
   unitsPerPx: number,
 ): HandleId | null {
   const r = (HANDLE_HIT_PX / 2) * unitsPerPx;
-  const points = handlePoints(p, origin.ox, origin.oy);
-  const under = (h: HandlePoint) => Math.abs(x - h.x) <= r && Math.abs(y - h.y) <= r;
-
-  // Delete wins any overlap. It is drawn on top, it is the smallest target, and resolving a
-  // tie towards "resize" would mean the user drags the corner they were trying to remove.
-  const del = points.find((h) => h.id === "del");
-  if (del && under(del)) return "del";
-
-  for (const h of points) {
-    if (under(h)) return h.id;
+  for (const h of handlePoints(p, origin.ox, origin.oy)) {
+    if (Math.abs(x - h.x) <= r && Math.abs(y - h.y) <= r) return h.id;
   }
   return null;
 }

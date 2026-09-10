@@ -788,6 +788,7 @@ export default function App() {
             <StudioOverlay
               fields={fields}
               asset={assetResolver}
+              onOpenInspector={() => setTab("style")}
             />
             {!media && (
               <label className="add-media" data-testid="add-media" title="Vertical photos and videos work best">

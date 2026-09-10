@@ -34,30 +34,40 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
-  // Stale-while-revalidate: serve the cached shell immediately, refresh in the background,
-  // and tell the page when a genuinely new version has arrived (§9.5).
+  // Network-first, falling back to the cache.
+  //
+  // This was stale-while-revalidate — `return cached ?? network` — which served the previous
+  // build on every visit and refreshed in the background. The app is one HTML file, so that
+  // meant the user was permanently one deploy behind, and further behind still if the tab
+  // stayed open. Fixes were shipped, verified live, and reported as "nothing has changed",
+  // which is exactly what the user was seeing.
+  //
+  // Offline still works: the cache answers whenever the network does not. The cost is a
+  // network round trip on a warm start, for a ~140 KB file, which is the right trade for
+  // never showing someone yesterday's app.
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(request, { ignoreSearch: true });
-
-      const network = fetch(request)
-        .then(async (response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            await cache.put(request, response.clone());
-            if (cached) {
-              const [fresh, old] = await Promise.all([copy.text(), cached.clone().text()]);
-              if (fresh !== old) {
-                const clients = await self.clients.matchAll();
-                for (const client of clients) client.postMessage({ type: "update-available" });
-              }
+      try {
+        const response = await fetch(request);
+        if (response.ok) {
+          // Tell any page that is already open when the build it is running has been
+          // superseded, so a long-lived tab can offer a reload rather than drift.
+          const cached = await cache.match(request, { ignoreSearch: true });
+          if (cached) {
+            const [fresh, old] = await Promise.all([response.clone().text(), cached.text()]);
+            if (fresh !== old) {
+              const clients = await self.clients.matchAll();
+              for (const client of clients) client.postMessage({ type: "update-available" });
             }
           }
-          return response;
-        })
-        .catch(() => cached);
-
-      return cached ?? network;
+          await cache.put(request, response.clone());
+        }
+        return response;
+      } catch {
+        const cached = await cache.match(request, { ignoreSearch: true });
+        if (cached) return cached;
+        throw new Error("offline and not cached");
+      }
     }),
   );
 });

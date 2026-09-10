@@ -31,8 +31,6 @@ export interface BeginResult {
   drag: DragState | null;
   /** Layer to select as a result of the press, if any. */
   select: string | null;
-  /** Layer to delete as a result of the press — the × handle on the selection frame. */
-  remove?: string | null;
 }
 
 const SNAP_PX = 8;
@@ -56,8 +54,6 @@ export function beginGesture(
     const placed = layout.byId.get(id);
     if (layer && placed && !layer.locked) {
       const handle = hitHandle(placed, layer.origin, x, y, unitsPerPx);
-      // The × is an action, not a gesture: it removes the layer on press and starts nothing.
-      if (handle === "del") return { drag: null, select: null, remove: id };
       if (handle) {
         return {
           drag: startDrag(handle === "rot" ? "rotate" : "resize", layer, placed, x, y, handle),
