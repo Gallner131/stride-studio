@@ -29,7 +29,7 @@ import {
   toBlob as canvasToBlob,
 } from "./export/image.ts";
 import { canUseWebCodecs, exportVideo, MAX_CLIP_SECONDS } from "./export/video.ts";
-import { registerServiceWorker } from "./pwa/register.ts";
+import { unregisterServiceWorker } from "./pwa/register.ts";
 import * as Strava from "./data/strava.ts";
 import { buildCaption, TONES } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
@@ -630,8 +630,9 @@ export default function App() {
   }, []);
 
   // §9.5: opens offline, and says so rather than silently swapping under the user.
-  const [updateReady, setUpdateReady] = useState(false);
-  useEffect(() => { registerServiceWorker(() => setUpdateReady(true)); }, []);
+  // The worker is gone (src/pwa/register.ts explains why). Remove any copy still installed
+  // in someone's browser, so the page they see is the page that was deployed.
+  useEffect(() => { unregisterServiceWorker(); }, []);
 
   const exportScale = () => (quality === "fast" ? 720 / FORMATS[format].w : quality === "2x" ? 2 : 1);
 
@@ -791,7 +792,14 @@ export default function App() {
       <div className="wrap">
         <section className="preview">
           <div className="row" style={{ marginBottom: 10 }}>
-            <h1>Stride Studio</h1>
+            <h1>
+              Stride Studio{" "}
+              {/* Which build is actually on screen. Without this, "I refreshed and nothing
+                  changed" and "it is deployed" are both unfalsifiable. */}
+              <span className="build-stamp" data-testid="build-stamp">
+                {typeof __BUILD_STAMP__ === "string" ? __BUILD_STAMP__ : "dev"}
+              </span>
+            </h1>
             <Seg value={format} options={[["story", "9:16"], ["post", "4:5"], ["square", "1:1"]]} onChange={setFmt} />
           </div>
           <div className="stage" style={{ aspectRatio: `${FORMATS[format].w}/${FORMATS[format].h}` }}>
@@ -1277,11 +1285,6 @@ export default function App() {
             ))}
           </ul>
         </Modal>
-      )}
-      {updateReady && (
-        <button type="button" className="toast update" onClick={() => window.location.reload()}>
-          New version — tap to reload
-        </button>
       )}
       {toast && <div className="toast">{toast}</div>}
     </div>

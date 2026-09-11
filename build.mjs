@@ -18,7 +18,14 @@ async function bundle() {
     target: ["es2019"],
     jsx: "automatic",
     sourcemap: DEV ? "inline" : false,
-    define: { "process.env.NODE_ENV": DEV ? '"development"' : '"production"' },
+    // A visible build stamp. Without one, "I refreshed and nothing is different" and "it is
+    // deployed" are both unfalsifiable, and we spent days there.
+    define: {
+      "process.env.NODE_ENV": DEV ? '"development"' : '"production"',
+      __BUILD_STAMP__: JSON.stringify(
+        new Date().toISOString().slice(5, 16).replace("T", " ").replace("-", "/"),
+      ),
+    },
     loader: { ".css": "css" },
     outdir: "dist",
   });

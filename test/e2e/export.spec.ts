@@ -129,13 +129,16 @@ test("the app is installable and its offline shell is served (§9.5)", async ({ 
   expect(manifest?.orientation).toBe("portrait");
   expect(manifest?.icons?.length).toBeGreaterThan(0);
 
-  // The worker is served and parses.
+  // The caching worker is gone: it served the previously-deployed build on every visit, so
+  // shipped fixes were invisible. What is served now is a tombstone that deletes the caches
+  // and unregisters itself, for browsers that still have the old one.
   const sw = await page.evaluate(async () => {
     const res = await fetch("./sw.js");
     return res.ok ? await res.text() : null;
   });
-  expect(sw).toContain("stride-v1");
-  expect(sw).toContain("update-available");
-  // It must never intercept the Strava token endpoints.
-  expect(sw).toContain("/api/");
+  expect(sw).toContain("unregister");
+  expect(sw).not.toContain("respondWith");
+
+  // And nothing registers a worker any more.
+  await expect.poll(async () => page.evaluate(() => navigator.serviceWorker?.controller === null)).toBe(true);
 });
