@@ -37,7 +37,7 @@ test("the sticker export is cropped tight to what it contains (§9.2)", async ({
 test("with no elements, the sticker export falls back to the full frame", async ({ page }) => {
   await openApp(page);
   await addFixturePhoto(page);
-  await page.locator("[data-testid='tpl-sticker']").click();
+  // Nothing has been added, which is the "no elements" case this covers.
   await page.locator("[data-testid='export-sticker']").click();
 
   const img = await inspectResultImage(page);

@@ -21,11 +21,13 @@ async function selectAllViaKeyboard(page: import("@playwright/test").Page) {
 test("a selected element can be deleted without leaving the canvas", async ({ page }) => {
   await openApp(page);
   await addText(page, "Regrettable");
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(1);
+
+  // Counted from the Layers tab's badge rather than by opening it: going to a tab clears the
+  // selection, which is the very thing under test here.
+  await expect(page.locator("[data-testid='tab-layers']")).toContainText("(1)");
 
   await page.locator("[data-testid='delete-selection']").click();
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(0);
+  await expect(page.locator("[data-testid='tab-layers']")).not.toContainText("(");
 
   // With nothing selected there is nothing to delete, so the button goes away.
   await expect(page.locator("[data-testid='delete-selection']")).toHaveCount(0);
@@ -148,29 +150,29 @@ test("keyboard shortcuts add, nudge, duplicate and delete (Appendix D)", async (
   await openApp(page);
   await page.locator("[data-testid='overlay']").click({ position: { x: 5, y: 5 } });
 
+  // Counted from the Layers tab's badge throughout: opening the tab would clear the
+  // selection these shortcuts operate on.
+  const count = page.locator("[data-testid='tab-layers']");
+
   // T adds text.
   await page.keyboard.press("t");
   await page.keyboard.press("Escape");
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(1);
+  await expect(count).toContainText("(1)");
 
   // S adds a stat, R adds a route.
   await page.locator("[data-testid='overlay']").click({ position: { x: 5, y: 5 } });
   await page.keyboard.press("s");
   await page.locator("[data-testid='overlay']").click({ position: { x: 5, y: 5 } });
   await page.keyboard.press("r");
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(3);
+  await expect(count).toContainText("(3)");
 
   // Select all, duplicate, then delete the copies.
   await selectAllViaKeyboard(page);
   await page.keyboard.press("ControlOrMeta+d");
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(6);
+  await expect(count).toContainText("(6)");
 
   await page.keyboard.press("Backspace");
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(3);
+  await expect(count).toContainText("(3)");
 });
 
 test("nudging with the arrow keys moves the selection", async ({ page }) => {

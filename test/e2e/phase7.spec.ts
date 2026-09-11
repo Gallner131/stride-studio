@@ -3,37 +3,6 @@ import { openApp, tab } from "./helpers";
 
 /** §2.7 S16/S17 and §8: layout links, caption tones, My designs. */
 
-test("caption tones rewrite the caption, and none mentions Strava", async ({ page }) => {
-  await openApp(page);
-  await tab(page, "Stats");
-
-  const caption = page.locator("[data-testid='caption']");
-  const seen = new Set<string>();
-
-  for (const tone of ["deadpan", "hype", "data", "poetic", "club"]) {
-    await page.locator(`[data-testid='tone-${tone}']`).click();
-    const text = (await caption.textContent()) ?? "";
-    expect(text.length, tone).toBeGreaterThan(20);
-    // Strava may appear as a hashtag but never in the prose.
-    expect(text.replace(/#\w+/g, ""), tone).not.toMatch(/strava/i);
-    seen.add(text);
-  }
-
-  expect(seen.size, "each tone should read differently").toBe(5);
-});
-
-test("the caption follows the activity", async ({ page }) => {
-  await openApp(page);
-  await tab(page, "Stats");
-  const caption = page.locator("[data-testid='caption']");
-  await expect(caption).toContainText("Sunday long run");
-
-  await page.locator("[data-testid='demo-workout']").click();
-  await expect(caption).toContainText("Strength + core");
-  await expect(caption).toContainText("#workout");
-  await expect(caption).not.toContainText("km");
-});
-
 test("a design saves itself and appears in My designs (§8)", async ({ page }) => {
   await openApp(page);
 

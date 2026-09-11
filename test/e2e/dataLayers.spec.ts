@@ -40,8 +40,7 @@ test("the route redraws for every stroke mode (§2.7 S5)", async ({ page }) => {
 
   // Animation off, so each sample is the settled final frame rather than a moment mid-draw.
   await page.locator("[data-testid='deselect']").click();
-  await tab(page, "Look");
-  await page.locator(".toggle", { hasText: "Animate" }).first().click();
+  await page.locator("[data-testid='toggle-animate']").click();
   await tab(page, "Layers");
   await page.locator("[data-testid='layers-list'] .layer-name").first().click();
 
@@ -76,13 +75,9 @@ test("a stat row drops fields the activity does not have (§4.6)", async ({ page
   await page.locator("[data-testid='row-field-hr']").click();
   await expect.poll(async () => (await stageSnapshot(page)) !== before, { timeout: 5000 }).toBe(true);
 
-  // Switch to the demo workout: no distance, no pace, no elevation — the row should shrink
-  // rather than print zeroes.
-  await page.locator("[data-testid='deselect']").click();
-  await tab(page, "Stats");
-  const beforeSwap = await stageSnapshot(page);
-  await page.locator("[data-testid='demo-workout']").click();
-  await expect.poll(async () => (await stageSnapshot(page)) !== beforeSwap, { timeout: 5000 }).toBe(true);
+  // The second half of this test switched to the demo workout to prove the row shrinks for
+  // an activity with no distance. There is no longer any way to load a workout from the UI;
+  // that behaviour is covered by test/unit/derive.test.ts.
 });
 
 test("a stat field can be changed and counts up", async ({ page }) => {
@@ -92,23 +87,6 @@ test("a stat field can be changed and counts up", async ({ page }) => {
   const before = await stageSnapshot(page);
   await page.locator("[data-testid='stat-field']").selectOption("hr");
   await expect.poll(async () => (await stageSnapshot(page)) !== before, { timeout: 5000 }).toBe(true);
-});
-
-test("route and charts show a reason when the activity lacks the data", async ({ page }) => {
-  const errors = await openApp(page);
-
-  // A workout has no GPS and no splits.
-  await tab(page, "Stats");
-  await page.locator("[data-testid='demo-workout']").click();
-
-  await add(page, "add-route");
-  await page.locator("[data-testid='deselect']").click();
-  await add(page, "add-chart-splits");
-
-  // Nothing should throw, and the design should still render.
-  const snap = await stageSnapshot(page);
-  expect(snap.length).toBeGreaterThan(1000);
-  expect(errors, errors.join("\n")).toEqual([]);
 });
 
 test("data layers are included in the export", async ({ page }) => {

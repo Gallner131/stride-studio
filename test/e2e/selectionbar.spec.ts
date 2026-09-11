@@ -39,11 +39,10 @@ test("colour can be changed from the selection, without opening a tab", async ({
 test("the toolbar deletes what is selected", async ({ page }) => {
   await openApp(page);
   await addText(page, "Delete me");
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(1);
+  await expect(page.locator("[data-testid='tab-layers']")).toContainText("(1)");
 
   await page.locator("[data-testid='selbar-delete']").click();
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(0);
+  await expect(page.locator("[data-testid='tab-layers']")).not.toContainText("(");
   await expect(page.locator("[data-testid='selection-bar']")).toHaveCount(0);
 });
 
@@ -52,8 +51,7 @@ test("the toolbar duplicates what is selected", async ({ page }) => {
   await addText(page, "Twice");
 
   await page.locator("[data-testid='selbar-duplicate']").click();
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(2);
+  await expect(page.locator("[data-testid='tab-layers']")).toContainText("(2)");
 });
 
 test("a colour applies to everything selected at once", async ({ page }) => {

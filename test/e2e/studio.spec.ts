@@ -46,19 +46,6 @@ test("unlimited text layers — §1.1 A3 is fixed", async ({ page }) => {
 test("dragging an element moves that element, not the whole design (§1.1 A2)", async ({ page }) => {
   await openApp(page);
 
-  // Legacy whole-design offsets, read with nothing selected (the inspector replaces the
-  // Adjust panel while a layer is selected).
-  const legacyOffsets = async () => {
-    await tab(page, "Adjust");
-    return page.evaluate(() => {
-      const inputs = [...document.querySelectorAll<HTMLInputElement>(".stack input[type=range]")];
-      return inputs.map((i) => i.value);
-    });
-  };
-
-  const before = await legacyOffsets();
-  expect(before.length, "Adjust panel should expose the legacy offset sliders").toBeGreaterThan(0);
-
   await addText(page, "Drag me");
   const layerBefore = await layerGeometry(page);
 
@@ -74,13 +61,11 @@ test("dragging an element moves that element, not the whole design (§1.1 A2)", 
   await page.mouse.move(cx - 60, cy - 120, { steps: 8 });
   await page.mouse.up();
 
-  // The element moved...
+  // The element moved. The other half of this test used to read the legacy whole-design
+  // offset sliders from the Adjust tab to prove the drag had not panned the background —
+  // that tab is gone, and so is the drag-to-pan gesture it guarded against.
   const layerAfter = await layerGeometry(page);
   expect(layerAfter, "the dragged layer's offset should change").not.toEqual(layerBefore);
-
-  // ...and the whole design did not.
-  await page.locator("[data-testid='deselect']").click();
-  expect(await legacyOffsets(), "an element drag must not pan the whole design").toEqual(before);
 });
 
 /** Reads the selected layer's offset out of the running app. */

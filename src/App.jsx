@@ -9,7 +9,6 @@ import { StudioOverlay } from "./ui/StudioOverlay.tsx";
 import { Inspector } from "./ui/Inspector.tsx";
 import { AddMenu } from "./ui/AddMenu.tsx";
 import { LayersPanel } from "./ui/LayersPanel.tsx";
-import { HyroxPanel } from "./ui/HyroxPanel.tsx";
 import { TemplateGallery } from "./ui/TemplateGallery.tsx";
 import { LookPicker } from "./ui/LookPicker.tsx";
 import { Suggestions } from "./ui/Suggestions.tsx";
@@ -20,7 +19,6 @@ import { measureLayer } from "./engine/layers.ts";
 import { AlignBar } from "./ui/AlignBar.tsx";
 import { getLook, DEFAULT_LOOK_ID } from "./looks/index.ts";
 import { hyroxFields, hyroxToActivity } from "./model/hyrox.ts";
-import { importedToActivity, parseTrackFile } from "./data/gpx.ts";
 import {
   copyImageToClipboard,
   cropCanvas,
@@ -31,38 +29,23 @@ import {
 import { canUseWebCodecs, exportVideo, MAX_CLIP_SECONDS } from "./export/video.ts";
 import { unregisterServiceWorker } from "./pwa/register.ts";
 import * as Strava from "./data/strava.ts";
-import { buildCaption, TONES } from "./export/caption.ts";
+import { buildCaption } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
 import { MyDesigns } from "./ui/MyDesigns.tsx";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer, newTextLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
-  W, H, FORMATS, setFormat, ANIM_SECONDS, DEMO, DEMO_WORKOUT, SPORTS, sportFromStrava, CATEGORIES, TEMPLATES, PALETTE, FILTERS, FONTS, BACKGROUNDS, DEFAULT_OPTS,
-  renderFrame, captionFor, fmtTime, fmtPace, fmtDate, fmtDist, decodePolyline, derive,
+  W, H, FORMATS, setFormat, ANIM_SECONDS, DEMO, SPORTS, sportFromStrava, DEFAULT_OPTS,
+  renderFrame, fmtTime, fmtDate, fmtDist, decodePolyline, derive,
 } from "./render.js";
 
 // Strava session storage lives in src/data/strava.ts, which owns the key and migrates the
 // legacy pasted-token shape (§7.2).
 const canShareFiles = typeof navigator !== "undefined" && !!navigator.canShare;
-const LOOKS_KEY = "stride.looks";
-const loadLooks = () => { try { return JSON.parse(localStorage.getItem(LOOKS_KEY) || "[]"); } catch { return []; } };
-const saveLooks = (l) => { try { localStorage.setItem(LOOKS_KEY, JSON.stringify(l)); } catch {} };
 
 // ---- small UI pieces (module scope so inputs keep focus while typing) ----
 function Seg({ value, options, onChange }) {
   return <div className="seg">{options.map(([v, label]) => <button key={v} type="button" className={value === v ? "on" : ""} onClick={() => onChange(v)}>{label}</button>)}</div>;
-}
-function Slider({ label, value, min, max, step, onChange, fmt }) {
-  return (
-    <label className="slider">
-      <div className="row"><span className="muted">{label}</span><span>{fmt ? fmt(value) : value}</span></div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} />
-    </label>
-  );
-}
-function Chip({ on, onClick, children, testid }) { return <button type="button" className={`chip ${on ? "on" : ""}`} onClick={onClick} data-testid={testid}>{children}</button>; }
-function Toggle({ on, onChange, label }) {
-  return <button type="button" className={`toggle ${on ? "on" : ""}`} onClick={() => onChange(!on)} aria-pressed={on}><span className="knob" /><span>{label}</span></button>;
 }
 function Modal({ title, children, onClose }) {
   return (
@@ -101,23 +84,6 @@ function ManualForm({ act, onChange }) {
 }
 
 // thumbnail of one template, re-rendered when inputs change
-function Thumb({ tpl, media, act, opts, format, selected, onClick }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const c = ref.current; if (!c) return;
-    const f = FORMATS[format]; const k = 216 / f.w;
-    c.width = 216; c.height = Math.round(f.h * k);
-    const ctx = c.getContext("2d"); ctx.save(); ctx.scale(k, k);
-    try { renderFrame(ctx, media, act, tpl.id, { ...opts, animate: false }, 1, 1); } catch {}
-    ctx.restore();
-  }, [tpl.id, media, act, opts, format]);
-  return (
-    <button type="button" className={`thumb ${selected ? "on" : ""}`} onClick={onClick} data-testid={`tpl-${tpl.id}`}>
-      <canvas ref={ref} />
-      <span><strong>{tpl.name}</strong><em className="muted">{tpl.desc}</em></span>
-    </button>
-  );
-}
 
 export default function App() {
   const [media, setMedia] = useState(null);
@@ -125,10 +91,8 @@ export default function App() {
   const [template, setTemplate] = useState("sticker");
   const [opts, setOpts] = useState(DEFAULT_OPTS);
   const [format, setFmt] = useState("story");
-  const [cat, setCat] = useState("All");
-  const [tab, setTab] = useState("style");
+  const [tab, setTab] = useState("designs");
   const [showStrava, setShowStrava] = useState(false);
-  const [showManual, setShowManual] = useState(false);
   const [exporting, setExporting] = useState("");
   const [progressPct, setProgressPct] = useState(0);
   const [result, setResult] = useState(null);
@@ -136,8 +100,6 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [animKey, setAnimKey] = useState(0);
   const [strava, setStrava] = useState(() => Strava.loadSession() ?? {});
-  const [looks, setLooks] = useState(() => loadLooks());
-  const [lookName, setLookName] = useState("");
   const dragRef = useRef(null);
   const [activities, setActivities] = useState([]);
   const [status, setStatus] = useState("");
@@ -159,9 +121,8 @@ export default function App() {
   const setStoreDoc = useEditor((st) => st.setDoc);
   const [designs, setDesigns] = useState([]);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [importNotes, setImportNotes] = useState([]);
   const [quality, setQuality] = useState("hd"); // 720 | 1080 (hd) | 2x
-  const [tone, setTone] = useState("deadpan");
+  const tone = "deadpan";
   const [storageNote, setStorageNote] = useState("");
 
   // Undo/redo comes from zundo's temporal store (§6.1).
@@ -319,9 +280,9 @@ export default function App() {
         undo: () => useEditor.temporal.getState().undo(),
         redo: () => useEditor.temporal.getState().redo(),
         onExportImage: () => exportImage("full"),
-        onAddText: () => { const l = newTextLayer(); addLayer(l); setTab("style"); },
-        onAddStat: () => { addLayer(newStatLayer("distance")); setTab("style"); },
-        onAddRoute: () => { addLayer(newRouteLayer()); setTab("style"); },
+        onAddText: () => { const l = newTextLayer(); addLayer(l); setTab("designs"); },
+        onAddStat: () => { addLayer(newStatLayer("distance")); setTab("designs"); },
+        onAddRoute: () => { addLayer(newRouteLayer()); setTab("designs"); },
         onToggleShortcutHelp: () => setShowShortcuts((v) => !v),
         onFit: () => {},
         onZoom: () => {},
@@ -562,7 +523,7 @@ export default function App() {
         v.play().catch(() => {});
         setMedia({ type: "video", el: v, url, name: f.name });
         setTemplate((t) => (["hud", "chase"].includes(t) ? t : "hud"));
-        setTab("style");
+        setTab("designs");
       };
       v.load();
     } else if (f.type.startsWith("image") || /\.(heic|heif)$/i.test(f.name)) {
@@ -584,29 +545,6 @@ export default function App() {
       setError("Please choose a photo or a video file.");
     }
     e.target.value = "";
-  };
-
-  // ---- file import (§7.3) ----
-  const onTrackFile = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setError("");
-    setImportNotes([]);
-    try {
-      const text = await file.text();
-      const imported = parseTrackFile(text, file.name);
-      if (!imported) {
-        setError(`Could not read ${file.name}. GPX and TCX files are supported; FIT is not yet.`);
-        return;
-      }
-      setAct(importedToActivity(imported));
-      setHyrox(null);
-      setImportNotes(imported.problems);
-      say(`${imported.name} imported`);
-    } catch (err) {
-      setError(`Could not read that file: ${err.message}`);
-    }
   };
 
   // ---- export (§9) ----
@@ -773,19 +711,8 @@ export default function App() {
 
   const set = (k, val) => setOpts((o) => ({ ...o, [k]: val }));
   const setStat = (k) => setOpts((o) => ({ ...o, stats: { ...o.stats, [k]: !o.stats[k] } }));
-  const shuffle = () => {
-    const pool = TEMPLATES.filter((t) => t.cat !== "Video" || media?.type === "video");
-    const t = pool[Math.floor(Math.random() * pool.length)].id;
-    const a = PALETTE[Math.floor(Math.random() * PALETTE.length)].c;
-    const f = FILTERS[Math.floor(Math.random() * FILTERS.length)].id;
-    setTemplate(t); setOpts((o) => ({ ...o, accent: a, filter: f, theme: a === "#111111" ? "dark" : "light" }));
-  };
 
   const d = useMemo(() => derive(effectiveAct, opts), [effectiveAct, opts]);
-  const hasPosition = ["sticker", "ticker", "bib", "grid", "stamp"].includes(template);
-  const hasMap = ["hud", "poster", "frame", "corner", "headline", "polaroid", "retro", "neon"].includes(template);
-  const shown = TEMPLATES.filter((t) => cat === "All" || t.cat === cat);
-  const thumbOpts = useMemo(() => ({ ...opts, scale: 1, offsetX: 0, offsetY: 0, zoom: 1, showMap: true, animate: false, kenburns: false, grain: 0, tagline: "" }), [opts.theme, opts.accent, opts.filter, opts.units, opts.stats, opts.vignette, opts.dim, opts.position, opts.fontHero, opts.fontBody, opts.textColor, opts.uppercase, opts.show, opts.bg]);
 
   return (
     <div className="app">
@@ -807,7 +734,7 @@ export default function App() {
             <StudioOverlay
               fields={fields}
               asset={assetResolver}
-              onOpenInspector={() => setTab("style")}
+              onOpenInspector={() => setTab("designs")}
             />
             {!media && (
               <label className="add-media" data-testid="add-media" title="Vertical photos and videos work best">
@@ -852,7 +779,6 @@ export default function App() {
           </div>
           <div className="btnrow">
             <label className="btn">{media ? "Change media" : "Choose file"}<input type="file" accept="image/*,video/*" onChange={onFile} data-testid="file-input-2" /></label>
-            <button type="button" className="btn" onClick={shuffle}>Surprise me</button>
             <button type="button" className="btn strava" onClick={() => setShowStrava(true)}>{strava.connected ? "Strava" : "Connect Strava"}</button>
           </div>
           {selection.length > 1 && <AlignBar measure={measure} />}
@@ -861,18 +787,15 @@ export default function App() {
 
         <section className="controls">
           <nav className="tabs">
-            {[["style", "Style"], ["designs", "Designs"], ["add", "Add"], ["layers", "Layers"], ["look", "Look"], ["text", "Text"], ["stats", "Stats"], ["hyrox", "HYROX"], ["adjust", "Adjust"]].map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>{l}{k === "layers" && doc.layers.length > 0 ? ` (${doc.layers.length})` : ""}</button>)}
+            {[["designs", "Designs"], ["look", "Looks"], ["add", "Add"], ["layers", "Layers"]].map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>{l}{k === "layers" && doc.layers.length > 0 ? ` (${doc.layers.length})` : ""}</button>)}
           </nav>
 
-          {/*
-            The inspector takes over the element-styling tabs, but NOT the document-level
-            ones: switching template, loading data or browsing layers must stay reachable
-            while something is selected.
-          */}
-          {selection.length > 0 && ["style", "look", "text", "adjust"].includes(tab) && (
+          {/* Selecting something turns the panel into that element's editor. The tab
+              content is what you get when nothing is selected. */}
+          {selection.length > 0 ? (
             <Inspector onDone={clearSelection} />
-          )}
-
+          ) : (
+            <>
           {tab === "designs" && (
             <>
               <Suggestions
@@ -912,23 +835,10 @@ export default function App() {
               )}
             </>
           )}
-          {tab === "add" && <AddMenu onAdded={() => setTab("style")} />}
-          {tab === "hyrox" && (
-            <HyroxPanel hyrox={hyrox} onApply={setHyrox} onToast={say} />
-          )}
-          {tab === "layers" && <LayersPanel onSelect={() => setTab("style")} />}
+          {tab === "add" && <AddMenu onAdded={() => setTab("designs")} />}
+          {tab === "layers" && <LayersPanel onSelect={() => setTab("designs")} />}
 
-          {tab === "style" && selection.length === 0 && (
-            <>
-              <div className="chips" style={{ marginBottom: 12 }}>{CATEGORIES.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}</div>
-              <div className="gallery">
-                {shown.map((t) => <Thumb key={t.id} tpl={t} media={media} act={act} opts={thumbOpts} format={format} selected={template === t.id} onClick={() => setTemplate(t.id)} />)}
-              </div>
-              {cat === "Video" && media?.type !== "video" && <p className="muted small" style={{ marginTop: 10 }}>These follow the clip's timeline, so they look best with a video. With a photo they still animate over 6 seconds.</p>}
-            </>
-          )}
-
-          {tab === "look" && selection.length === 0 && (
+          {tab === "look" && (
             <div className="stack">
               {matchedLook && (
                 <button
@@ -946,170 +856,9 @@ export default function App() {
                 </button>
               )}
               <LookPicker lookId={lookId} onPick={(id) => { setLookId(id); say(`${getLook(id)?.name} applied`); }} />
-              <div>
-                <div className="muted small label">Accent (legacy templates)</div>
-                <div className="swatches">
-                  {PALETTE.map((p) => <button key={p.c} type="button" title={p.name} aria-label={p.name} className={`swatch ${opts.accent === p.c ? "on" : ""}`} style={{ background: p.c }} onClick={() => set("accent", p.c)} />)}
-                  <label className="swatch custom" title="Custom colour">+<input type="color" value={/^#[0-9A-F]{6}$/i.test(opts.accent) ? opts.accent : "#ffffff"} onChange={(e) => set("accent", e.target.value.toUpperCase())} /></label>
-                </div>
-              </div>
-              {!media && (
-                <div>
-                  <div className="muted small label">Background (no photo)</div>
-                  <div className="swatches">{BACKGROUNDS.map((b) => <button key={b.id} type="button" title={b.name} aria-label={b.name} className={`swatch ${opts.bg === b.id ? "on" : ""}`} style={{ background: `linear-gradient(160deg, ${b.stops.join(",")})` }} onClick={() => set("bg", b.id)} data-testid={`bg-${b.id}`} />)}</div>
-                </div>
-              )}
-              <div className="grid2">
-                <div><div className="muted small label">Text</div><Seg value={opts.theme} options={[["light", "Light"], ["dark", "Dark"]]} onChange={(v) => set("theme", v)} /></div>
-                {hasPosition && <div><div className="muted small label">Position</div><Seg value={opts.position} options={[["top", "Top"], ["bottom", "Bottom"]]} onChange={(v) => set("position", v)} /></div>}
-                {hasMap && <div><div className="muted small label">Route map</div><Seg value={opts.showMap ? "on" : "off"} options={[["on", "Shown"], ["off", "Hidden"]]} onChange={(v) => set("showMap", v === "on")} /></div>}
-              </div>
-              <div>
-                <div className="muted small label">Photo filter</div>
-                <div className="chips">{FILTERS.map((f) => <Chip key={f.id} on={opts.filter === f.id} onClick={() => set("filter", f.id)}>{f.name}</Chip>)}</div>
-              </div>
-              <div className="grid2">
-                <Toggle on={opts.animate} onChange={(v) => set("animate", v)} label="Animate" />
-                <Toggle on={opts.kenburns} onChange={(v) => set("kenburns", v)} label="Slow zoom on photo" />
-              </div>
-              <Slider label="Vignette" value={opts.vignette} min={0} max={0.7} step={0.05} onChange={(v) => set("vignette", v)} fmt={(v) => `${Math.round(v * 100)}%`} />
-              <Slider label="Darken photo" value={opts.dim} min={0} max={0.6} step={0.05} onChange={(v) => set("dim", v)} fmt={(v) => `${Math.round(v * 100)}%`} />
-              <Slider label="Film grain" value={opts.grain} min={0} max={0.35} step={0.05} onChange={(v) => set("grain", v)} fmt={(v) => `${Math.round(v * 100)}%`} />
             </div>
           )}
-
-          {tab === "text" && selection.length === 0 && (
-            <div className="stack">
-              <div>
-                <div className="muted small label">Big numbers</div>
-                <div className="chips">{FONTS.map((f) => <Chip key={f.id} on={opts.fontHero === f.id} onClick={() => set("fontHero", f.id)} testid={`hero-${f.id}`}><span style={{ fontFamily: f.css }}>{f.name}</span></Chip>)}</div>
-              </div>
-              <div>
-                <div className="muted small label">Labels and stats</div>
-                <div className="chips">{FONTS.map((f) => <Chip key={f.id} on={opts.fontBody === f.id} onClick={() => set("fontBody", f.id)}><span style={{ fontFamily: f.css }}>{f.name}</span></Chip>)}</div>
-              </div>
-              <div>
-                <div className="muted small label">Text colour</div>
-                <div className="swatches">
-                  <button type="button" className={`swatch auto ${!opts.textColor ? "on" : ""}`} onClick={() => set("textColor", null)} title="Automatic (light/dark)">Auto</button>
-                  {PALETTE.map((p) => <button key={p.c} type="button" title={p.name} aria-label={p.name} className={`swatch ${opts.textColor === p.c ? "on" : ""}`} style={{ background: p.c }} onClick={() => set("textColor", p.c)} />)}
-                  <label className="swatch custom" title="Custom colour">+<input type="color" value={/^#[0-9A-F]{6}$/i.test(opts.textColor || "") ? opts.textColor : "#ffffff"} onChange={(e) => set("textColor", e.target.value.toUpperCase())} /></label>
-                </div>
-              </div>
-              <div>
-                <div className="muted small label">Your own words</div>
-                <p className="small" style={{ marginTop: 0 }}>
-                  Text is now a layer you can put anywhere, style on its own, and add as many of as you like.
-                </p>
-                <button type="button" className="btn primary" onClick={() => setTab("add")} data-testid="go-add-text">
-                  Add text
-                </button>
-              </div>
-              <div>
-                <div className="muted small label">Show</div>
-                <div className="chips">
-                  <Chip on={opts.show.name !== false} onClick={() => setOpts((o) => ({ ...o, show: { ...o.show, name: o.show.name === false } }))}>Activity name</Chip>
-                  <Chip on={opts.show.meta !== false} onClick={() => setOpts((o) => ({ ...o, show: { ...o.show, meta: o.show.meta === false } }))} testid="show-meta">Name and date line</Chip>
-                  <Chip on={opts.show.row !== false} onClick={() => setOpts((o) => ({ ...o, show: { ...o.show, row: o.show.row === false } }))}>Stat row</Chip>
-                  <Chip on={opts.uppercase} onClick={() => set("uppercase", !opts.uppercase)}>UPPERCASE</Chip>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === "stats" && selection.length === 0 && (
-            <div className="stack">
-              <div className="card">
-                <div className="row">
-                  <div>
-                    <strong>{effectiveAct.name}</strong> <span className="muted small">{hyrox ? "HYROX" : SPORTS[effectiveAct.sport]?.label || "Run"}</span>
-                    <div className="muted small">{d.hasDist ? `${fmtDist(d.dist)} ${d.unit}, ` : ""}{fmtTime(effectiveAct.time)}{d.hasDist ? `, ${d.paceStr}` : ""}{effectiveAct.elevation ? `, ${Math.round(d.elevV)} ${d.elevU}` : ""}{effectiveAct.hr ? `, ${effectiveAct.hr} bpm` : ""}</div>
-                    {hyrox && (
-                      <div className="muted small">
-                        8 km of running in {hyroxFields(hyrox).runTotal} · {hyroxFields(hyrox).runPace}
-                      </div>
-                    )}
-                  </div>
-                  <button type="button" className="link" onClick={() => setShowManual((s) => !s)} data-testid="edit-stats">{showManual ? "Done" : "Edit"}</button>
-                </div>
-                {showManual && <ManualForm key={act.id} act={act} onChange={setAct} />}
-                {importNotes.length > 0 && (
-                  <ul className="hyrox-problems" data-testid="import-notes">
-                    {importNotes.map((n) => (
-                      <li key={n} className="small">{n}</li>
-                    ))}
-                  </ul>
-                )}
-                <div className="chips" style={{ marginTop: 12 }}>
-                  <Chip on={act.id === "demo"} onClick={() => setAct(DEMO)}>Demo run</Chip>
-                  <Chip on={act.id === "demo-workout"} onClick={() => setAct(DEMO_WORKOUT)} testid="demo-workout">Demo workout</Chip>
-                  <Chip onClick={() => setShowStrava(true)}>From Strava</Chip>
-                  <label className="chip" data-testid="import-chip">
-                    Import a file
-                    <input
-                      type="file"
-                      accept=".gpx,.tcx,application/gpx+xml"
-                      onChange={onTrackFile}
-                      data-testid="track-input"
-                      style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
-                    />
-                  </label>
-                </div>
-              </div>
-              <div><div className="muted small label">Units</div><Seg value={opts.units} options={[["km", "Kilometres"], ["mi", "Miles"]]} onChange={(v) => set("units", v)} /></div>
-              <div>
-                <div className="muted small label">Show in the stat row</div>
-                <div className="chips">{[["time", "Time"], ["pace", "Pace / speed"], ["elev", "Elevation"], ["hr", "Heart rate"], ["cal", "Calories"], ["date", "Date"]].map(([k, l]) => <Chip key={k} on={opts.stats[k]} onClick={() => setStat(k)}>{l}</Chip>)}</div>
-              </div>
-              <div className="card">
-                <div className="muted small label">Caption</div>
-                <div className="chips tight" style={{ marginBottom: 8 }}>
-                  {TONES.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`chip ${tone === t.id ? "on" : ""}`}
-                      title={t.hint}
-                      data-testid={`tone-${t.id}`}
-                      onClick={() => setTone(t.id)}
-                    >
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-                <pre className="caption" data-testid="caption">{caption()}</pre>
-                <button type="button" className="btn" onClick={copyCaption} data-testid="copy-caption">Copy caption</button>
-              </div>
-            </div>
-          )}
-
-          {tab === "adjust" && selection.length === 0 && (
-            <div className="stack">
-              <Slider label="Text size" value={opts.scale} min={0.7} max={1.35} step={0.05} onChange={(v) => set("scale", v)} fmt={(v) => `${Math.round(v * 100)}%`} />
-              <p className="muted small" style={{ margin: 0 }}>Tip: drag directly on the preview to move the design.</p>
-              <Slider label="Move left / right" value={opts.offsetX || 0} min={-500} max={500} step={10} onChange={(v) => set("offsetX", v)} fmt={(v) => `${v > 0 ? "+" : ""}${v}`} />
-              <Slider label="Move up / down" value={opts.offsetY} min={-800} max={800} step={10} onChange={(v) => set("offsetY", v)} fmt={(v) => `${v > 0 ? "+" : ""}${v}`} />
-              <Slider label="Photo zoom" value={opts.zoom} min={1} max={2} step={0.02} onChange={(v) => set("zoom", v)} fmt={(v) => `${v.toFixed(2)}x`} />
-              <button type="button" className="link" onClick={() => setOpts((o) => ({ ...DEFAULT_OPTS, accent: o.accent, filter: o.filter, theme: o.theme, units: o.units, stats: o.stats, fontHero: o.fontHero, fontBody: o.fontBody, textColor: o.textColor, tagline: o.tagline, show: o.show }))}>Reset position and size</button>
-              <div className="card">
-                <div className="muted small label">My looks</div>
-                <p className="small">Save the current style, colours, fonts and filter as a preset you can apply to any future run in one tap.</p>
-                <div className="hms">
-                  <input value={lookName} onChange={(e) => setLookName(e.target.value)} placeholder="Name this look" data-testid="look-name" />
-                  <button type="button" className="btn" data-testid="save-look" onClick={() => { const name = lookName.trim() || `Look ${looks.length + 1}`; const { offsetX, offsetY, zoom, ...rest } = opts; const next = [...looks.filter((l) => l.name !== name), { name, template, format, opts: rest }]; setLooks(next); saveLooks(next); setLookName(""); say(`Saved "${name}"`); }}>Save</button>
-                </div>
-                {looks.length > 0 && (
-                  <div className="chips" style={{ marginTop: 10 }}>
-                    {looks.map((l) => (
-                      <span key={l.name} className="chip lookchip">
-                        <button type="button" onClick={() => { setTemplate(l.template); setFmt(l.format || "story"); setOpts((o) => ({ ...o, ...l.opts })); say(`Applied "${l.name}"`); }} data-testid={`look-${l.name}`}>{l.name}</button>
-                        <button type="button" aria-label={`Delete ${l.name}`} onClick={() => { const next = looks.filter((x) => x.name !== l.name); setLooks(next); saveLooks(next); }}>×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            </>
           )}
 
           <div className="exports">
