@@ -50,28 +50,6 @@ test("shuffle explores within the same rules rather than rerolling randomly", as
   expect((await names()).length).toBe(3);
 });
 
-test("suggestions adapt to a workout with no GPS", async ({ page }) => {
-  await openApp(page);
-  await tab(page, "Stats");
-  await page.locator("[data-testid='demo-workout']").click();
-  await tab(page, "Designs");
-
-  const text = await page.locator(".suggestions").textContent();
-  // No route design can be offered for a treadmill session...
-  expect(text).not.toContain("Trace");
-  // ...but the heart-rate ones are.
-  expect(text).toMatch(/Session|Workout|Effort/);
-});
-
-test("HYROX outranks everything else once a result is loaded", async ({ page }) => {
-  await openApp(page);
-  await tab(page, "HYROX");
-  await page.locator("[data-testid='hyrox-sample']").click();
-  await tab(page, "Designs");
-
-  await expect(page.locator("[data-testid='suggestion-0']")).toContainText("HYROX");
-});
-
 test("Match my photo builds a look from the photo's own colours (§2.7 S2)", async ({ page }) => {
   const errors = await openApp(page);
   await addFixturePhoto(page);

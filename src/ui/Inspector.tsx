@@ -55,7 +55,7 @@ export function Inspector({ onDone }: { onDone: () => void }) {
   const patch = (fn: (l: Layer) => void) => patchLayer(layer.id, fn);
 
   return (
-    <div className="inspector">
+    <div className="inspector" data-testid="inspector">
       <div className="row ins-title">
         <strong>{layer.name}</strong>
         <button type="button" className="link" onClick={onDone} data-testid="inspector-done">

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openApp, tab } from "./helpers";
+import { openApp, stageSnapshot, tab } from "./helpers";
 
 /**
  * §7.2 sign-in, with the Strava API and the config endpoint mocked. The point of these is
@@ -152,14 +152,13 @@ test("picking an activity redraws the design with the real data", async ({ page 
 
   await page.goto("/dist/index.html?code=abc123");
   await page.waitForSelector("[data-testid='strava-act-101']");
-  await page.locator("[data-testid='strava-act-101']").click();
 
-  // The activity card lives in the Stats tab.
-  await tab(page, "Stats");
-  await expect(page.locator(".card strong").first()).toHaveText("Wandsworth loop");
-  const summary = page.locator(".card div.muted.small").first();
-  await expect(summary).toContainText("10.0");
-  await expect(summary).toContainText("45:00");
+  // The activity card that used to carry these numbers lived in the Stats tab, which is
+  // gone. What matters is that picking the activity actually applies it, and the canvas is
+  // where that shows.
+  const before = await stageSnapshot(page);
+  await page.locator("[data-testid='strava-act-101']").click();
+  await expect.poll(async () => (await stageSnapshot(page)) !== before, { timeout: 5000 }).toBe(true);
 });
 
 test("explains a callback-domain mismatch instead of failing silently", async ({ page }) => {

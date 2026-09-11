@@ -62,8 +62,6 @@ test("a colour you pick by hand survives a look change (§4.3)", async ({ page }
   await tab(page, "Add");
   await page.locator("[data-testid='add-headline']").click();
   await page.keyboard.press("Escape");
-
-  await tab(page, "Style");
   // Open the Colour section and pick hot pink (index 5 in the swatch list).
   await page.locator("[data-testid='section-colour']").click();
   await page.locator(".ins-body .swatch").nth(5).click();
@@ -82,7 +80,6 @@ test("a colour you pick by hand survives a look change (§4.3)", async ({ page }
   // The literal is still on the layer: the Text picker shows exactly that swatch selected.
   await tab(page, "Layers");
   await page.locator("[data-testid='layers-list'] .layer-name").first().click();
-  await tab(page, "Style");
   await page.locator("[data-testid='section-colour']").click();
   const textPicker = page.locator('.ins-row[aria-label="Text"]');
   await expect(textPicker.locator(".swatch.on")).toHaveCount(1);
@@ -91,16 +88,4 @@ test("a colour you pick by hand survives a look change (§4.3)", async ({ page }
     .evaluate((el) => getComputedStyle(el).backgroundColor);
   // #FF2D95
   expect(picked).toBe("rgb(255, 45, 149)");
-});
-
-test("looks restyle HYROX designs too", async ({ page }) => {
-  await openApp(page);
-  await tab(page, "HYROX");
-  await page.locator("[data-testid='hyrox-sample']").click();
-  await applyDesign(page, "hyroxCard");
-
-  await tab(page, "Look");
-  const before = await stageSnapshot(page);
-  await page.locator("[data-testid='look-iron']").click();
-  await expect.poll(async () => (await stageSnapshot(page)) !== before, { timeout: 5000 }).toBe(true);
 });

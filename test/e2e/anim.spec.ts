@@ -46,7 +46,6 @@ test("a pulsing element does not vanish when animation is off", async ({ page })
   await page.keyboard.press("Escape");
 
   // Give it the looping preset, which used to compute a NaN scale at t = Infinity.
-  await tab(page, "Style");
   await page.locator("[data-testid='section-animation']").click();
   await page.locator("[data-testid='anim-preset']").selectOption("pulse");
 

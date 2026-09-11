@@ -48,7 +48,7 @@ const report = (violations: Awaited<ReturnType<typeof scan>>["violations"]) =>
     )
     .join("\n  ");
 
-for (const view of ["Style", "Look", "Text", "Stats", "Adjust"] as const) {
+for (const view of ["Designs", "Look", "Add", "Layers"] as const) {
   test(`no serious accessibility violations on the ${view} tab`, async ({ page }) => {
     await openApp(page);
     await tab(page, view);

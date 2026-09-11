@@ -17,7 +17,7 @@ export async function openApp(page: Page): Promise<string[]> {
   return errors;
 }
 
-export type TabName = "Style" | "Add" | "Layers" | "Look" | "Text" | "Stats" | "HYROX" | "Designs" | "Adjust";
+export type TabName = "Designs" | "Look" | "Add" | "Layers";
 
 /**
  * Clicks one of the control tabs.
@@ -26,7 +26,22 @@ export type TabName = "Style" | "Add" | "Layers" | "Look" | "Text" | "Stats" | "
  * is also a template category chip) and the Layers tab carries a live count, so no
  * text-based selector is stable.
  */
+/**
+ * Clears the selection if there is one.
+ *
+ * Selecting an element turns the panel into that element's editor, so the tab content —
+ * including the Layers list — is only on screen when nothing is selected.
+ */
+export async function deselect(page: Page): Promise<void> {
+  const button = page.locator("[data-testid='deselect']");
+  if ((await button.count()) > 0) await button.click();
+}
+
 export async function tab(page: Page, name: TabName): Promise<void> {
+  // Selecting an element turns the panel into that element's editor, so no tab content is on
+  // screen while something is selected — and from step 2 the tab bar itself is hidden. Going
+  // to a tab therefore means leaving the element you were editing.
+  await deselect(page);
   await page.locator(`[data-testid='tab-${name.toLowerCase()}']`).click();
 }
 

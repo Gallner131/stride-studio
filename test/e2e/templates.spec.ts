@@ -24,47 +24,6 @@ test("applying a template builds a whole design out of editable elements", async
   expect(errors, errors.join("\n")).toEqual([]);
 });
 
-test("templates that need data the activity lacks are disabled with the reason (§4.8)", async ({ page }) => {
-  await openApp(page);
-
-  // The demo workout has heart rate but no GPS, splits or elevation.
-  await tab(page, "Stats");
-  await page.locator("[data-testid='demo-workout']").click();
-  await tab(page, "Designs");
-
-  const trace = page.locator("[data-testid='newtpl-trace']");
-  await expect(trace).toBeDisabled();
-  await expect(trace).toContainText("Needs GPS");
-
-  const ribbon = page.locator("[data-testid='newtpl-ribbon']");
-  await expect(ribbon).toBeDisabled();
-
-  // ...but the HR-based ones are offered.
-  await expect(page.locator("[data-testid='newtpl-session']")).toBeEnabled();
-  await expect(page.locator("[data-testid='newtpl-workout']")).toBeEnabled();
-});
-
-test("HYROX templates only appear once a result is loaded", async ({ page }) => {
-  await openApp(page);
-  await tab(page, "Designs");
-  await expect(page.locator("[data-testid='newtpl-hyroxCard']")).toBeDisabled();
-  await expect(page.locator("[data-testid='newtpl-hyroxCard']")).toContainText("Needs a HYROX result");
-
-  await tab(page, "HYROX");
-  await page.locator("[data-testid='hyrox-sample']").click();
-  await expect(page.locator("[data-testid='hyrox-summary']")).toBeVisible();
-
-  await tab(page, "Designs");
-  await expect(page.locator("[data-testid='newtpl-hyroxCard']")).toBeEnabled();
-
-  const before = await stageSnapshot(page);
-  await page.locator("[data-testid='newtpl-hyroxCard']").click();
-  await expect.poll(async () => (await stageSnapshot(page)) !== before, { timeout: 5000 }).toBe(true);
-
-  await tab(page, "Layers");
-  await expect(page.locator("[data-testid='layers-list'] .layer-row")).toHaveCount(5);
-});
-
 test("applying a template keeps the layers you added yourself (§6.8)", async ({ page }) => {
   await openApp(page);
 

@@ -76,7 +76,9 @@ export function Suggestions({ caps, analysis, hasPhoto, onApply }: SuggestionsPr
             </span>
             <strong>{s.template.name}</strong>
             <em style={{ opacity: 0.72 }}>{s.reason}</em>
-            <em style={{ opacity: 0.5 }}>{s.look.name}</em>
+            {/* 0.5 put the look's name at 4.18:1 on the darker tiles, which the axe suite
+                fails. This tab is now the first screen, so the violation was on every load. */}
+            <em style={{ opacity: 0.75 }}>{s.look.name}</em>
           </button>
         ))}
       </div>
