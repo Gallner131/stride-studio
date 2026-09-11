@@ -62,3 +62,49 @@ test("a pulsing element does not vanish when animation is off", async ({ page })
   const withoutLayer = await stageSnapshot(page);
   expect(withLayer).not.toBe(withoutLayer);
 });
+
+// The preview plays once and holds (see src/editor/previewClock.ts). That left the Animated
+// toggle looking broken: the clock only restarted on a template, activity or format change,
+// so once the six seconds were up, turning animation back on redrew the settled frame and
+// nothing moved. Reported as "does the animated work? didn't seem to".
+test("turning animation back on replays it", async ({ page }) => {
+  await openApp(page);
+  await tab(page, "Designs");
+  await page.locator("[data-testid='newtpl-pb']").click();
+
+  // Let it finish and settle.
+  await page.waitForTimeout(7000);
+  const settled = await stageSnapshot(page);
+  await page.waitForTimeout(400);
+  expect(await stageSnapshot(page), "should be settled before we start").toBe(settled);
+
+  const toggle = page.locator("[data-testid='toggle-animate']");
+  await toggle.click();
+  await expect(toggle).toHaveText("Still");
+  await toggle.click();
+  await expect(toggle).toHaveText("Animated");
+
+  // It must be moving again, not sitting at the end state.
+  const a = await stageSnapshot(page);
+  await page.waitForTimeout(400);
+  expect(await stageSnapshot(page), "turning animation on should replay it").not.toBe(a);
+});
+
+test("replay is offered without a photo", async ({ page }) => {
+  await openApp(page);
+  await tab(page, "Designs");
+  await page.locator("[data-testid='newtpl-pb']").click();
+  await page.waitForTimeout(7000);
+
+  // The replay control used to require media, so on the default empty canvas there was no
+  // way to see the animation a second time at all.
+  const replay = page.locator("[data-testid='replay']");
+  await expect(replay).toBeVisible();
+
+  const settled = await stageSnapshot(page);
+  await replay.click();
+  const a = await stageSnapshot(page);
+  await page.waitForTimeout(400);
+  expect(await stageSnapshot(page)).not.toBe(a);
+  expect(a, "replay should restart from the beginning").not.toBe(settled);
+});
