@@ -91,12 +91,28 @@ describe("buildTemplateLayers", () => {
     expect(route.style.simplify).toBe(2);
   });
 
-  it("keeps every layer inside the canvas width", () => {
+  // A layer wider than the canvas is almost always a mistake — except when a design means
+  // to bleed off the edge, which is a real technique and how "bleed" gets its name. The
+  // difference is declared: bleeding deliberately means opting out of the safe zone, so
+  // that opt-out is what this allows, rather than simply raising the ceiling for everyone.
+  it("keeps every layer inside the canvas width unless it deliberately bleeds", () => {
     for (const t of TEMPLATES) {
       for (const l of buildTemplateLayers(t)) {
-        if (typeof l.w === "number") expect(l.w, `${t.id}/${l.name}`).toBeLessThanOrEqual(1000);
+        if (typeof l.w !== "number") continue;
+        if (l.constraints.safeZone === false) continue;
+        expect(l.w, `${t.id}/${l.name}`).toBeLessThanOrEqual(1000);
       }
     }
+  });
+
+  it("only lets a layer past the canvas edge when it has opted out of the safe zone", () => {
+    const bleeding = TEMPLATES.flatMap((t) =>
+      buildTemplateLayers(t)
+        .filter((l) => typeof l.w === "number" && (l.w as number) > 1000)
+        .map((l) => `${t.id}/${l.name}`),
+    );
+    // Kept as an explicit list so a new one is a decision somebody made, not a drift.
+    expect(bleeding).toEqual(["bleed/Route"]);
   });
 });
 

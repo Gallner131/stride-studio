@@ -250,6 +250,45 @@ function TextControls({
 
   return (
     <>
+      <Section title="Colour" open>
+        <Row label="Text">
+          <ColorPicker
+            value={layer.style.color}
+            onChange={(c) =>
+              set((t) => {
+                t.style.color = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+        <Row label="Shadow">
+          <Seg
+            value={layer.style.shadow ? "on" : "off"}
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            onChange={(v) =>
+              set((t) => {
+                t.style.shadow = v === "on";
+              })
+            }
+          />
+        </Row>
+        <Row label="Behind the text">
+          <ColorPicker
+            allowNone
+            value={layer.style.fill?.color ?? null}
+            onChange={(c) =>
+              set((t) => {
+                t.style.fill = c
+                  ? { color: c, pad: t.style.fill?.pad ?? 18, radius: t.style.fill?.radius ?? 14 }
+                  : null;
+              })
+            }
+          />
+        </Row>
+      </Section>
       <Section title="Text" open>
         <textarea
           className="wide"
@@ -396,46 +435,6 @@ function TextControls({
             onChange={(v) =>
               set((t) => {
                 t.style.uppercase = v === "on";
-              })
-            }
-          />
-        </Row>
-      </Section>
-
-      <Section title="Colour">
-        <Row label="Text">
-          <ColorPicker
-            value={layer.style.color}
-            onChange={(c) =>
-              set((t) => {
-                t.style.color = c ?? "#FFFFFF";
-              })
-            }
-          />
-        </Row>
-        <Row label="Shadow">
-          <Seg
-            value={layer.style.shadow ? "on" : "off"}
-            options={[
-              ["on", "On"],
-              ["off", "Off"],
-            ]}
-            onChange={(v) =>
-              set((t) => {
-                t.style.shadow = v === "on";
-              })
-            }
-          />
-        </Row>
-        <Row label="Behind the text">
-          <ColorPicker
-            allowNone
-            value={layer.style.fill?.color ?? null}
-            onChange={(c) =>
-              set((t) => {
-                t.style.fill = c
-                  ? { color: c, pad: t.style.fill?.pad ?? 18, radius: t.style.fill?.radius ?? 14 }
-                  : null;
               })
             }
           />
@@ -659,6 +658,28 @@ function StatControls({ layer, patch }: { layer: StatLayer; patch: (fn: (l: Laye
   const set = (fn: (s: StatLayer) => void) => patch((l) => fn(l as StatLayer));
   return (
     <>
+      <Section title="Colour" open>
+        <Row label="Value">
+          <ColorPicker
+            value={layer.style.valueColor}
+            onChange={(c) =>
+              set((s) => {
+                s.style.valueColor = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+        <Row label="Label">
+          <ColorPicker
+            value={layer.style.labelColor}
+            onChange={(c) =>
+              set((s) => {
+                s.style.labelColor = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+      </Section>
       <Section title="Data" open>
         <Row label="Field">
           <select
@@ -766,28 +787,6 @@ function StatControls({ layer, patch }: { layer: StatLayer; patch: (fn: (l: Laye
           />
         </Row>
       </Section>
-      <Section title="Colour">
-        <Row label="Value">
-          <ColorPicker
-            value={layer.style.valueColor}
-            onChange={(c) =>
-              set((s) => {
-                s.style.valueColor = c ?? "#FFFFFF";
-              })
-            }
-          />
-        </Row>
-        <Row label="Label">
-          <ColorPicker
-            value={layer.style.labelColor}
-            onChange={(c) =>
-              set((s) => {
-                s.style.labelColor = c ?? "#FFFFFF";
-              })
-            }
-          />
-        </Row>
-      </Section>
     </>
   );
 }
@@ -796,6 +795,18 @@ function StatRowControls({ layer, patch }: { layer: StatRowLayer; patch: (fn: (l
   const set = (fn: (s: StatRowLayer) => void) => patch((l) => fn(l as StatRowLayer));
   return (
     <>
+      <Section title="Colour" open>
+        <Row label="Value">
+          <ColorPicker
+            value={layer.style.color}
+            onChange={(c) =>
+              set((s) => {
+                s.style.color = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+      </Section>
       <Section title="Data" open>
         <p className="muted small" style={{ margin: 0 }}>
           Tap to add or remove. Fields your activity does not have are dropped automatically.
@@ -908,18 +919,6 @@ function StatRowControls({ layer, patch }: { layer: StatRowLayer; patch: (fn: (l
             onChange={(v) =>
               set((s) => {
                 s.style.valueSize = v;
-              })
-            }
-          />
-        </Row>
-      </Section>
-      <Section title="Colour">
-        <Row label="Value">
-          <ColorPicker
-            value={layer.style.color}
-            onChange={(c) =>
-              set((s) => {
-                s.style.color = c ?? "#FFFFFF";
               })
             }
           />
@@ -1113,6 +1112,28 @@ function ChartControls({ layer, patch }: { layer: ChartLayer; patch: (fn: (l: La
   const kinds: ChartLayer["kind"][] = ["hr", "pace", "elevation", "splits", "zones", "rings"];
   return (
     <>
+      <Section title="Colour" open>
+        <Row label="Accent">
+          <ColorPicker
+            value={layer.style.color}
+            onChange={(c) =>
+              set((ch) => {
+                ch.style.color = c ?? "#D8FF3A";
+              })
+            }
+          />
+        </Row>
+        <Row label="Text">
+          <ColorPicker
+            value={layer.style.text}
+            onChange={(c) =>
+              set((ch) => {
+                ch.style.text = c ?? "#FFFFFF";
+              })
+            }
+          />
+        </Row>
+      </Section>
       <Section title="Chart" open>
         <Row label="Kind">
           <span className="chips tight">
@@ -1235,28 +1256,6 @@ function ChartControls({ layer, patch }: { layer: ChartLayer; patch: (fn: (l: La
             onChange={(v) =>
               set((c) => {
                 c.options.labels = v === "on";
-              })
-            }
-          />
-        </Row>
-      </Section>
-      <Section title="Colour">
-        <Row label="Accent">
-          <ColorPicker
-            value={layer.style.color}
-            onChange={(c) =>
-              set((ch) => {
-                ch.style.color = c ?? "#D8FF3A";
-              })
-            }
-          />
-        </Row>
-        <Row label="Text">
-          <ColorPicker
-            value={layer.style.text}
-            onChange={(c) =>
-              set((ch) => {
-                ch.style.text = c ?? "#FFFFFF";
               })
             }
           />

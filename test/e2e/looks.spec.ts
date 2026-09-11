@@ -62,8 +62,8 @@ test("a colour you pick by hand survives a look change (§4.3)", async ({ page }
   await tab(page, "Add");
   await page.locator("[data-testid='add-headline']").click();
   await page.keyboard.press("Escape");
-  // Open the Colour section and pick hot pink (index 5 in the swatch list).
-  await page.locator("[data-testid='section-colour']").click();
+  // Colour is the first section and open by default now, so pick hot pink straight away
+  // (index 5 in the swatch list) — clicking the heading would collapse it.
   await page.locator(".ins-body .swatch").nth(5).click();
   const withOverride = await stageSnapshot(page);
 
@@ -80,7 +80,6 @@ test("a colour you pick by hand survives a look change (§4.3)", async ({ page }
   // The literal is still on the layer: the Text picker shows exactly that swatch selected.
   await tab(page, "Layers");
   await page.locator("[data-testid='layers-list'] .layer-name").first().click();
-  await page.locator("[data-testid='section-colour']").click();
   const textPicker = page.locator('.ins-row[aria-label="Text"]');
   await expect(textPicker.locator(".swatch.on")).toHaveCount(1);
   const picked = await textPicker
