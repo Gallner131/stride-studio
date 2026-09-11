@@ -225,7 +225,10 @@ export default function App() {
   const stateRef = useRef({});
   stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look };
   const startRef = useRef(performance.now());
-  useEffect(() => { startRef.current = performance.now(); }, [template, animKey, act, format]);
+  // Restart the animation whenever there is something new to watch — including turning the
+  // Animated toggle on. Without opts.animate here the preview plays once, holds, and then
+  // the toggle does nothing you can see, because the clock has already run out.
+  useEffect(() => { startRef.current = performance.now(); }, [template, animKey, act, format, opts.animate, doc.templateId]);
   useEffect(() => { setFormat(format); }, [format]);
 
   // §4.9: switching format keeps anchors and only nudges what would fall outside the new
@@ -397,7 +400,9 @@ export default function App() {
     };
     if (media?.type === "video" || opts.animate) loop(); else draw();
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look]);
+  // animKey is in here because the loop stops once the animation settles; pressing Replay
+  // resets the clock, and without a dependency on it nothing would start drawing again.
+  }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look, animKey]);
 
   // ---- Strava (§7.2) ----
   //
@@ -743,7 +748,9 @@ export default function App() {
                 <input type="file" accept="image/*,video/*" onChange={onFile} data-testid="file-input" />
               </label>
             )}
-            {media && opts.animate && <button type="button" className="replay" onClick={() => setAnimKey((k) => k + 1)} title="Replay animation">↻</button>}
+            {/* Offered whenever there is an animation to replay. It used to require media,
+                so on the default empty canvas there was no way to watch it twice. */}
+            {opts.animate && <button type="button" className="replay" onClick={() => setAnimKey((k) => k + 1)} title="Replay animation" data-testid="replay">↻</button>}
           </div>
           <div className="btnrow toolbar">
             <button type="button" className="btn" onClick={() => undo()} disabled={!canUndo} title="Undo" data-testid="undo">↶</button>
