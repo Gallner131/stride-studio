@@ -358,6 +358,15 @@ export default function App() {
     setZoneBands(parseHeartRateZones(data));
   }, []);
 
+  // Zones live in React state, and the session is restored from storage on mount — so
+  // without this, they were fetched once at sign-in and gone on the next page load. Every
+  // reload showed no zones, which is exactly what "the zone fix isn't working" looked like.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run once for the restored session
+  useEffect(() => {
+    const restored = Strava.loadSession();
+    if (restored?.connected) loadZones(restored);
+  }, [loadZones]);
+
   // Plays once, then holds. See src/editor/previewClock.ts for why it no longer replays.
   const animElapsed = () => (performance.now() - startRef.current) / 1000;
   const animT = () => previewT(animElapsed(), ANIM_SECONDS);
@@ -990,6 +999,26 @@ export default function App() {
                 type="button"
                 className="btn primary strava"
                 data-testid="strava-regrant"
+                onClick={() => Strava.beginSignIn(stravaConfig, { force: true })}
+              >
+                Reconnect
+              </button>
+            </div>
+          )}
+
+          {/* Zones come from GET /athlete/zones, which needs profile:read_all. A connection
+              made before that scope was requested gets a 401 there, and the app would then
+              simply draw no zones — indistinguishable from being broken. Say what to do. */}
+          {strava.connected && !zoneBands && stravaConfig?.configured && (
+            <div className="row" data-testid="strava-zones-warning" style={{ marginTop: 8 }}>
+              <span className="small">
+                Your Strava heart-rate zones have not been imported, so zone charts stay
+                empty. Reconnect to grant access to your profile.
+              </span>
+              <button
+                type="button"
+                className="btn primary strava"
+                data-testid="strava-regrant-zones"
                 onClick={() => Strava.beginSignIn(stravaConfig, { force: true })}
               >
                 Reconnect
