@@ -331,6 +331,16 @@ export const fetchActivities = (
 ): Promise<FetchResult<StravaActivitySummary[]>> =>
   authedGet<StravaActivitySummary[]>(`/athlete/activities?per_page=${perPage}`, session);
 
+/**
+ * The athlete's own heart-rate zones — the ones they see in the Strava app.
+ *
+ * Needs profile:read_all. A connection granted before that scope was requested will get a
+ * 401 here, which grantedActivityAccess()'s sibling check surfaces as a prompt to reconnect
+ * rather than as a wrong zone.
+ */
+export const fetchAthleteZones = (session: StravaSession): Promise<FetchResult<unknown>> =>
+  authedGet<unknown>("/athlete/zones", session);
+
 export const fetchActivity = (
   session: StravaSession,
   id: number,

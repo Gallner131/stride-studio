@@ -29,6 +29,7 @@ import {
 import { canUseWebCodecs, exportVideo, MAX_CLIP_SECONDS } from "./export/video.ts";
 import { unregisterServiceWorker } from "./pwa/register.ts";
 import * as Strava from "./data/strava.ts";
+import { parseHeartRateZones } from "./data/stravaZones.ts";
 import { buildCaption } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
 import { MyDesigns } from "./ui/MyDesigns.tsx";
@@ -133,6 +134,9 @@ export default function App() {
   const canRedo = temporal.futureStates.length > 0;
 
   const [hyrox, setHyrox] = useState(null);
+  // The athlete's real heart-rate zones, from Strava. Null means we do not know them, and
+  // nothing zone-related is drawn rather than guessed (§7.4).
+  const [zoneBands, setZoneBands] = useState(null);
   const [lookId, setLookId] = useState(DEFAULT_LOOK_ID);
   const [matchedLook, setMatchedLook] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -152,9 +156,9 @@ export default function App() {
   // extra {hyroxTotal}, {roxzone}, {station.*} bindings.
   const effectiveAct = useMemo(() => (hyrox ? { ...act, ...hyroxToActivity(hyrox) } : act), [act, hyrox]);
   const fields = useMemo(() => {
-    const base = buildFields(effectiveAct, opts);
+    const base = buildFields(effectiveAct, opts, zoneBands);
     return hyrox ? { ...base, ...hyroxFields(hyrox) } : base;
-  }, [effectiveAct, opts, hyrox]);
+  }, [effectiveAct, opts, hyrox, zoneBands]);
   const series = useMemo(() => {
     const a = effectiveAct;
     const km = (a.distance || 0) / 1000;
@@ -175,6 +179,7 @@ export default function App() {
       route: a.route || [],
       hr: a.hrStream || [],
       hrMax: a.hrMax || undefined,
+      zones: zoneBands ?? undefined,
       splits: a.splits || [],
       altitude: a.elev || [],
       distanceKm: km,
@@ -183,7 +188,7 @@ export default function App() {
       effort,
       calories: a.calories || undefined,
     };
-  }, [effectiveAct]);
+  }, [effectiveAct, zoneBands]);
 
   const caps = useMemo(
     () => ({
@@ -342,6 +347,17 @@ export default function App() {
 
   const refreshDesigns = useCallback(async () => { setDesigns(await listDocs()); }, []);
 
+  // The athlete's real heart-rate zones. Fetched once per session; if Strava will not give
+  // them — an older connection granted before profile:read_all was requested, say — we keep
+  // null and simply do not draw zones, rather than deriving them from a number that is not
+  // a maximum (§7.4).
+  const loadZones = useCallback(async (session) => {
+    if (!session?.connected) return;
+    const { data, session: fresh } = await Strava.fetchAthleteZones(session);
+    if (fresh && fresh !== session) setStrava(fresh);
+    setZoneBands(parseHeartRateZones(data));
+  }, []);
+
   // Plays once, then holds. See src/editor/previewClock.ts for why it no longer replays.
   const animElapsed = () => (performance.now() - startRef.current) / 1000;
   const animT = () => previewT(animElapsed(), ANIM_SECONDS);
@@ -426,6 +442,7 @@ export default function App() {
       setStrava(session);
       setShowStrava(true);
       await loadActivities(session);
+      await loadZones(session);
     })();
   }, []);
 
@@ -462,6 +479,7 @@ export default function App() {
     Strava.saveSession(session);
     setStrava(session);
     await loadActivities(session);
+    await loadZones(session);
   };
 
   const pickActivity = async (a) => {
@@ -493,7 +511,10 @@ export default function App() {
       time: a.moving_time,
       elevation: a.total_elevation_gain || 0,
       hr: a.average_heartrate ? Math.round(a.average_heartrate) : null,
-      hrMax: a.max_heartrate ? Math.round(a.max_heartrate) + 5 : 190,
+      // The peak reached during THIS run, for display. It used to have 5 added and be used
+      // as the zone ceiling, which reported every run as Z4/Z5 (§7.4). Zones now come from
+      // the athlete's own Strava zones; see zoneBands below.
+      hrMax: a.max_heartrate ? Math.round(a.max_heartrate) : null,
       calories: dd.calories ? Math.round(dd.calories) : null,
       route: decodePolyline(dd.map?.polyline || a.map?.summary_polyline),
       splits: splits.length ? splits : null,

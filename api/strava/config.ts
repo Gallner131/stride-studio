@@ -23,7 +23,10 @@ export default async function handler(request: Request): Promise<Response> {
     JSON.stringify({
       configured: clientId !== "" && (process.env.STRAVA_CLIENT_SECRET ?? "") !== "",
       clientId,
-      scope: "read,activity:read_all",
+      // profile:read_all is what allows GET /athlete/zones — the athlete's real heart-rate
+      // zones. Without it the app would have to derive zones from a max HR, which is how it
+      // ended up reporting every run as Z4/Z5 (§7.4).
+      scope: "read,activity:read_all,profile:read_all",
     }),
     {
       status: allowed ? 200 : 403,

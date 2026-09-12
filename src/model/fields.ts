@@ -1,7 +1,9 @@
 // Builds the §4.6 field table from a legacy activity + opts, so text layers can bind to
 // activity data. Phase 1 exposes the fields the legacy `derive()` already computes; the
 // milestone/weather/delta fields arrive with the data layer in Phase 5.
-import { derive, fmtClock, fmtDate, fmtDateLong, fmtDist, fmtTime, SPORTS, zoneShares } from "../render.js";
+import type { ZoneBand } from "../data/stravaZones";
+import { zoneSharesFromBands } from "../data/stravaZones";
+import { derive, fmtClock, fmtDate, fmtDateLong, fmtDist, fmtTime, SPORTS } from "../render.js";
 import type { FieldTable } from "./bindings";
 
 interface LegacyActivity {
@@ -18,7 +20,12 @@ interface LegacyActivity {
   hrStream?: number[] | null;
 }
 
-export function buildFields(act: LegacyActivity, opts: Record<string, unknown>): FieldTable {
+export function buildFields(
+  act: LegacyActivity,
+  opts: Record<string, unknown>,
+  /** The athlete's real zones from Strava. Without them, zone bindings are left unset. */
+  zones: ZoneBand[] | null = null,
+): FieldTable {
   const d = derive(act, opts, 1);
   const sportTable = SPORTS as Record<string, { label: string } | undefined>;
   const sport = sportTable[act.sport ?? "run"] ?? SPORTS.run;
@@ -46,8 +53,12 @@ export function buildFields(act: LegacyActivity, opts: Record<string, unknown>):
   // separate functions, so expose them as their own keys too.
   fields["date|long"] = fmtDateLong(act.date);
 
-  if (act.hrStream?.length) {
-    const shares: number[] = zoneShares(act.hrStream, act.hrMax || 190);
+  // Zone bindings come from the athlete's own zones or not at all. They used to divide by
+  // `act.hrMax`, which for a Strava import is the peak reached during THAT RUN — so an easy
+  // run at 140 bpm reported as Z4 (§7.4). Absent zones leave these unset, and a design
+  // binding {zonePercent.2} then renders empty rather than confidently wrong.
+  const shares = act.hrStream?.length ? zoneSharesFromBands(act.hrStream, zones ?? []) : null;
+  if (shares) {
     const total = (act.time ?? 0) / 60;
     shares.forEach((share, i) => {
       fields[`zonePercent.${i + 1}`] = Math.round(share * 100);

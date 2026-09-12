@@ -2,6 +2,9 @@
 //
 // Charts are live, not static images (§5.8): each one draws in as time advances, so the
 // exported video replays the activity rather than fading a picture in.
+
+import type { ZoneBand } from "../data/stravaZones";
+import { zoneOfBands, zoneSharesFromBands } from "../data/stravaZones";
 import { resample, smoothSeries } from "./geometry";
 import { fontStack } from "./text";
 
@@ -29,8 +32,13 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
 export interface ChartData {
   /** Heart-rate samples. */
   hr?: number[];
-  /** Max HR, for zone boundaries. */
+  /**
+   * The peak heart rate reached during THIS activity. A number to display — never a zone
+   * ceiling. Using it as one is what made every run report as Z4/Z5 (§7.4).
+   */
   hrMax?: number;
+  /** The athlete's real zones, from Strava. Absent means we do not know them. */
+  zones?: ZoneBand[];
   /** Per-km pace in seconds. */
   splits?: number[];
   /** Altitude samples. */
@@ -74,29 +82,14 @@ const fmtDuration = (sec: number): string => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
-function zoneOf(bpm: number, max: number): number {
-  const f = bpm / (max || 190);
-  if (f < 0.6) return 0;
-  if (f < 0.7) return 1;
-  if (f < 0.8) return 2;
-  if (f < 0.9) return 3;
-  return 4;
-}
-
-/** Time in each zone as a share of the stream. */
-export function zoneShares(hr: number[], hrMax: number): number[] {
-  const counts = [0, 0, 0, 0, 0];
-  if (hr.length === 0) return counts;
-  for (const bpm of hr) counts[zoneOf(bpm, hrMax)] = (counts[zoneOf(bpm, hrMax)] ?? 0) + 1;
-  return counts.map((c) => c / hr.length);
-}
-
 /** Nothing to draw — the caller shows a hint instead of an empty box. */
 export function chartHasData(kind: ChartKind, data: ChartData): boolean {
   switch (kind) {
     case "hr":
-    case "zones":
       return (data.hr?.length ?? 0) > 1;
+    case "zones":
+      // Without the athlete's real zones there is nothing honest to draw.
+      return (data.hr?.length ?? 0) > 1 && (data.zones?.length ?? 0) > 0;
     case "pace":
     case "splits":
       return (data.splits?.length ?? 0) > 1;
@@ -206,7 +199,8 @@ function drawHr(
       ctx.beginPath();
       ctx.moveTo(x(i - 1), y(series[i - 1] ?? min));
       ctx.lineTo(x(i), y(series[i] ?? min));
-      ctx.strokeStyle = style.zoneColors[zoneOf(series[i] ?? min, hrMax)] ?? style.color;
+      const band = zoneOfBands(series[i] ?? min, data.zones ?? []);
+      ctx.strokeStyle = (band === null ? undefined : style.zoneColors[band]) ?? style.color;
       ctx.stroke();
     }
   } else {
@@ -425,7 +419,11 @@ function drawZones(
   const hr = data.hr ?? [];
   if (hr.length < 2) return;
 
-  const shares = zoneShares(hr, data.hrMax ?? Math.max(...hr) + 5);
+  // Only the athlete's own zones will do. Deriving them from this run's peak is how an easy
+  // run at 140 bpm came out as Z4 (§7.4); with no zones we draw nothing and the caller shows
+  // the "needs data" hint, because a confidently wrong zone is worse than no zone.
+  const shares = zoneSharesFromBands(hr, data.zones ?? []);
+  if (!shares) return;
   const p = Math.max(0, Math.min(1, options.progress));
   const rowH = h / 5;
   const barH = Math.min(rowH * 0.62, 44);
