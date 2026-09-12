@@ -1,8 +1,8 @@
 // Builds the §4.6 field table from a legacy activity + opts, so text layers can bind to
 // activity data. Phase 1 exposes the fields the legacy `derive()` already computes; the
 // milestone/weather/delta fields arrive with the data layer in Phase 5.
-import type { ZoneBand } from "../data/stravaZones";
-import { zoneSharesFromBands } from "../data/stravaZones";
+import type { ZoneBand } from "../data/hr";
+import { zoneSharesFromBands } from "../data/hr";
 import { derive, fmtClock, fmtDate, fmtDateLong, fmtDist, fmtTime, SPORTS } from "../render.js";
 import type { FieldTable } from "./bindings";
 

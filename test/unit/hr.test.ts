@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { parseHeartRateZones, zoneOfBands } from "../../src/data/stravaZones";
+import {
+  bandsFromMax,
+  parseHeartRateZones,
+  resolveAthleteHrMax,
+  resolveZones,
+  ZONE_META,
+  zoneOfBands,
+  zoneSharesFromBands,
+} from "../../src/data/hr";
+import { FIXTURE_ATHLETE } from "../fixtures/activities.js";
 
 /**
  * §7.4. Reported as "says everything in Z4 and Z5 for a run mainly in Z2 and Z3", and then:
@@ -94,5 +103,93 @@ describe("zoneOfBands", () => {
 
   it("has no answer without bands, rather than a wrong one", () => {
     expect(zoneOfBands(140, [])).toBeNull();
+  });
+});
+
+describe("zoneSharesFromBands", () => {
+  const bands = parseHeartRateZones(documented) ?? [];
+
+  it("is null without bands or without a stream", () => {
+    expect(zoneSharesFromBands([120, 140], [])).toBeNull();
+    expect(zoneSharesFromBands([], bands)).toBeNull();
+  });
+
+  it("shares sum to 1 and land in the right zones", () => {
+    const shares = zoneSharesFromBands([100, 140, 160, 180, 200], bands) ?? [];
+    expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
+    expect(shares).toEqual([0.2, 0.2, 0.2, 0.2, 0.2]);
+  });
+});
+
+describe("resolveZones", () => {
+  it("returns undefined when there is no source of truth", () => {
+    // Not a default, not a nominal 190. Nothing.
+    expect(resolveZones({}, null)).toBeUndefined();
+    expect(resolveZones({ hrMax: null }, null)).toBeUndefined();
+  });
+
+  it("prefers the athlete's own Strava zones over a typed-in maximum", () => {
+    const zones = resolveZones({ hrMax: 200 }, FIXTURE_ATHLETE);
+    expect(zones?.source).toBe("strava");
+    expect(zones?.bands).toBe(FIXTURE_ATHLETE.hrZones);
+  });
+
+  it("falls back to bands synthesised from prefs.hrMax", () => {
+    const zones = resolveZones({ hrMax: 190 }, null);
+    expect(zones?.source).toBe("user");
+    expect(zones?.bands).toHaveLength(5);
+  });
+
+  it("never consults an activity — there is no parameter for one", () => {
+    // Conflict 1: the signature itself is the guarantee. An activity's peak cannot reach
+    // this function, so it cannot quietly become a zone ceiling again.
+    expect(resolveZones).toHaveLength(2);
+  });
+});
+
+describe("bandsFromMax", () => {
+  const bands = bandsFromMax(190);
+
+  it("starts Z1 at zero, like Strava does", () => {
+    // Not 0.5 x max. Nothing measures that floor, and using it would make the first band's
+    // height on a chart depend on where the zones happened to come from.
+    expect(bands.map((b) => b.min)).toEqual([0, 114, 133, 152, 171]);
+  });
+
+  it("leaves Z5 open-ended, like Strava does", () => {
+    expect(bands.map((b) => b.max)).toEqual([114, 133, 152, 171, Number.POSITIVE_INFINITY]);
+  });
+
+  it("is contiguous — no gap for a reading to fall through", () => {
+    expect(bands.slice(1).map((b) => b.min)).toEqual(bands.slice(0, -1).map((b) => b.max));
+  });
+
+  it("agrees with the fixture athlete, whose zones came from Strava", () => {
+    // Same athlete, same maximum, same geometry whichever route the zones took. This is
+    // what settling boundaries[0] at 0 buys: a chart that does not change shape by source.
+    expect(bands).toEqual(FIXTURE_ATHLETE.hrZones);
+  });
+});
+
+describe("resolveAthleteHrMax", () => {
+  it("is null when nobody has told us the athlete's maximum", () => {
+    expect(resolveAthleteHrMax({}, null)).toBeNull();
+  });
+
+  it("does not fall back to a nominal 190", () => {
+    expect(resolveAthleteHrMax({ hrMax: null }, { hrZones: [] })).toBeNull();
+  });
+
+  it("prefers the athlete's own figure, then the one typed into Settings", () => {
+    expect(resolveAthleteHrMax({ hrMax: 185 }, FIXTURE_ATHLETE)).toBe(190);
+    expect(resolveAthleteHrMax({ hrMax: 185 }, null)).toBe(185);
+  });
+});
+
+describe("ZONE_META", () => {
+  it("has 5 entries matching legacy render.js", () => {
+    expect(ZONE_META).toHaveLength(5);
+    expect(ZONE_META[0]?.name).toBe("Recovery");
+    expect(ZONE_META[4]?.name).toBe("Max");
   });
 });
