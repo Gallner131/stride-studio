@@ -19,6 +19,9 @@ line references, acceptance criteria and a paste-in prompt. `CLAUDE.md` still go
   anything still installed; `sw.js` is a tombstone. Offline support went with it and should
   come back only when the app is worth keeping offline.
 - Suite: 423 unit, 200 e2e per run, 354-cell golden smoke. Bundle ~136 KB gzipped.
+- **Zones need one reconnect.** Existing Strava connections predate `profile:read_all`, so
+  `/athlete/zones` 401s for them. The Strava panel now says so and offers a forced-consent
+  Reconnect rather than drawing empty charts silently.
 - **The golden pixel baseline has still never been recorded.** Run the `golden-update`
   workflow. Until then CI's golden job fails by design.
 
@@ -69,10 +72,14 @@ decorative. Recording it is the highest-value first action.
 
 Phase 0 — reconcile, before any Phase A brief:
 
-1. Write `scripts/verify-plan.mjs` and run it across Phase A. Record which briefs are stale.
-2. Finish the HR fix properly by adopting the brief's architecture: create `src/data/hr.ts`
-   per PR-A1, absorb `stravaZones.ts` into it, migrate **all five** chartLayers call sites,
-   and mark PR-C1 done.
+1. **Record the golden baseline** via the `golden-update` workflow. Dozens of briefs gate on
+   "zero golden diff" and that check means nothing until the baseline exists. Every visual PR
+   after it (A6, A10, A12) regenerates goldens, so recording now makes those diffs reviewable.
+2. **Update the 13 drifted briefs** from `npm run verify:plan`, and settle the two conflicts
+   above (`boundaries[0]`, canvas placeholder text).
+3. **Finish the HR fix** to the brief's architecture: create `src/data/hr.ts` per PR-A1,
+   absorb `stravaZones.ts` into it, migrate **all five** chartLayers call sites, mark PR-C1
+   done.
 
 Then Phase A in the order of §1.3's critical path: A0 → A1 → A2 → A3 → A4 → A5, with A4.5 and
 A11 after. A6 (fmtPace `4:60` + Invalid Date), A7 (splits tail note) and A8 (CSS variables)
