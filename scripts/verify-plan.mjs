@@ -13,7 +13,7 @@
  *   node scripts/verify-plan.mjs PR-A2     # check one brief
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const REPO = resolve(process.cwd());
@@ -39,9 +39,8 @@ function extractLineRefs(body) {
   if (!section) return [];
   const refs = [];
   const rx = /`([^`]+):(\d+)(?:-\d+)?`.*?—\s*`([^`]+)`/g;
-  let m;
-  while ((m = rx.exec(section[1]))) {
-    refs.push({ file: m[1], line: parseInt(m[2], 10), expected: m[3] });
+  for (const m of section[1].matchAll(rx)) {
+    refs.push({ file: m[1], line: Number.parseInt(m[2], 10), expected: m[3] });
   }
   return refs;
 }
@@ -49,7 +48,9 @@ function extractLineRefs(body) {
 function extractFileClaims(body) {
   const section = body.match(/#### Files\s+([\s\S]*?)(?=\n#### |\n---)/);
   if (!section) return { added: [], modified: [], deleted: [] };
-  const added = [], modified = [], deleted = [];
+  const added = [],
+    modified = [],
+    deleted = [];
   const modMatch = section[1].match(/\*\*Modified:\*\*([\s\S]*?)(?=\*\*|$)/);
   const addMatch = section[1].match(/\*\*Added:\*\*([\s\S]*?)(?=\*\*|$)/);
   const delMatch = section[1].match(/\*\*Deleted:\*\*([\s\S]*?)(?=\*\*|$)/);
@@ -57,9 +58,15 @@ function extractFileClaims(body) {
   // identifiers in the prose ("session.athlete", "$font.display", "look.motion.entrance")
   // are read as files and reported missing.
   const pathRx = /`([^`*]+\/[^`*]+\.(?:ts|tsx|js|jsx|json|css|mjs|sql|html|md))`/g;
-  if (modMatch) { let m; while ((m = pathRx.exec(modMatch[1]))) modified.push(m[1]); }
-  if (addMatch) { let m; while ((m = pathRx.exec(addMatch[1]))) added.push(m[1]); }
-  if (delMatch) { let m; while ((m = pathRx.exec(delMatch[1]))) deleted.push(m[1]); }
+  if (modMatch) {
+    for (const m of modMatch[1].matchAll(pathRx)) modified.push(m[1]);
+  }
+  if (addMatch) {
+    for (const m of addMatch[1].matchAll(pathRx)) added.push(m[1]);
+  }
+  if (delMatch) {
+    for (const m of delMatch[1].matchAll(pathRx)) deleted.push(m[1]);
+  }
   return { added, modified, deleted };
 }
 
@@ -92,7 +99,9 @@ function checkBrief(pr) {
     // Normalise: strip whitespace, quotes, semicolons for loose match
     const norm = (s) => s.replace(/[\s;"'`]/g, "");
     if (!norm(actual).includes(norm(ref.expected))) {
-      errors.push(`  ✗ ${ref.file}:${ref.line} expected ${JSON.stringify(ref.expected.slice(0, 40))}, got ${JSON.stringify(actual.trim().slice(0, 60))}`);
+      errors.push(
+        `  ✗ ${ref.file}:${ref.line} expected ${JSON.stringify(ref.expected.slice(0, 40))}, got ${JSON.stringify(actual.trim().slice(0, 60))}`,
+      );
     }
   }
 
