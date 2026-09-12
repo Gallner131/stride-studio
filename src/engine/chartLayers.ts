@@ -32,13 +32,19 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
 export interface ChartData {
   /** Heart-rate samples. */
   hr?: number[];
-  /**
-   * The peak heart rate reached during THIS activity. A number to display — never a zone
-   * ceiling. Using it as one is what made every run report as Z4/Z5 (§7.4).
-   */
-  hrMax?: number;
   /** The athlete's real zones, from Strava. Absent means we do not know them. */
   zones?: ZoneBand[];
+  /**
+   * The athlete's true maximum heart rate, from the resolver — never an activity's peak,
+   * and never a nominal 190. Only the rings need it, as the denominator for "what fraction
+   * of their capacity was this". No band carries one, because Strava's top zone is
+   * open-ended. Absent means we do not know, and the ring stays empty rather than guessing.
+   *
+   * This replaces `hrMax`, which was the peak reached during THIS activity and was read as
+   * the athlete's ceiling everywhere — one field doing two jobs, and the reason every run
+   * reported as Z4/Z5 (§7.4).
+   */
+  athleteHrMax?: number;
   /** Per-km pace in seconds. */
   splits?: number[];
   /** Altitude samples. */
@@ -148,7 +154,6 @@ function drawHr(
     resample(raw, Math.min(raw.length, Math.max(60, Math.round(w / 3)))),
     options.smooth ?? 5,
   );
-  const hrMax = data.hrMax ?? Math.max(...raw) + 5;
   const min = Math.min(...series);
   const max = Math.max(...series);
   const span = max - min || 1;
@@ -157,19 +162,23 @@ function drawHr(
   const x = (i: number) => (i / (series.length - 1)) * w;
   const y = (v: number) => h - ((v - min) / span) * h * 0.92 - h * 0.04;
 
-  // Zone bands behind the trace.
-  if (options.bands) {
+  // Zone bands behind the trace, drawn where the athlete's zones actually are.
+  //
+  // These used to be five equal tenths of `data.hrMax ?? max(stream) + 5` — so they were
+  // always drawn, always five, and on any activity whose peak was not the athlete's maximum
+  // they were in the wrong place. Without real zones there is no band to draw: the trace
+  // still renders, just without the coloured backing (§7.4).
+  const bands = data.zones;
+  if (options.bands && bands?.length) {
     ctx.save();
-    for (let z = 0; z < 5; z++) {
-      const lo = (0.5 + z * 0.1) * hrMax;
-      const hi = (0.6 + z * 0.1) * hrMax;
-      if (hi < min || lo > max) continue;
-      const yTop = y(Math.min(max, hi));
-      const yBottom = y(Math.max(min, lo));
+    bands.forEach((band, z) => {
+      if (band.max < min || band.min > max) return;
+      const yTop = y(Math.min(max, band.max));
+      const yBottom = y(Math.max(min, band.min));
       ctx.fillStyle = style.zoneColors[z] ?? style.muted;
       ctx.globalAlpha = 0.14;
       ctx.fillRect(0, yTop, w, Math.max(1, yBottom - yTop));
-    }
+    });
     ctx.restore();
   }
 
@@ -479,8 +488,13 @@ function drawRings(
       return { label: "Effort", value: v, display: String(Math.round(data.effort ?? 0)), color: style.color };
     }
     if (m === "hr") {
-      const max = data.hrMax ?? 190;
-      const v = (data.avgHr ?? 0) / max;
+      // The ring shows intensity, so the denominator has to be the athlete's maximum. It
+      // was this activity's peak, which normalises every run against itself — a recovery
+      // jog and a 5k time trial filled the ring about equally — and when there was no peak
+      // it invented 190. With no maximum we draw the bpm figure and leave the arc empty:
+      // we know the average, we do not know what fraction of their capacity it was (§7.4).
+      const max = data.athleteHrMax;
+      const v = max ? (data.avgHr ?? 0) / max : 0;
       return {
         label: "Avg HR",
         value: v,

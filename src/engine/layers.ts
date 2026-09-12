@@ -1,5 +1,6 @@
 // Renderer registry — §5.3. One entry per layer type, each exposing render() and
 // measure(). Adding a layer type is a new entry, never a switch statement.
+import type { ZoneBand } from "../data/hr";
 import type { FieldTable } from "../model/bindings";
 import { resolveBindings } from "../model/bindings";
 import type { HyroxResult } from "../model/hyrox";
@@ -42,7 +43,10 @@ export interface RenderEnv {
   series?: {
     route?: LatLng[];
     hr?: number[];
-    hrMax?: number;
+    /** The athlete's real zones. Without them nothing zone-dependent is drawn. */
+    zones?: ZoneBand[];
+    /** The athlete's true maximum — not this activity's peak. Rings only. */
+    athleteHrMax?: number;
     splits?: number[];
     altitude?: number[];
     distanceKm?: number;
@@ -441,7 +445,8 @@ const routeRenderer: LayerRenderer<RouteLayer> = {
 
 const CHART_REASON: Record<ChartLayer["kind"], string> = {
   hr: "No heart rate in this activity",
-  zones: "No heart rate in this activity",
+  // Not the heart rate — that is present. What is missing is the athlete's own zones.
+  zones: "Connect Strava or set your max heart rate to see zones",
   pace: "No split data in this activity",
   splits: "No split data in this activity",
   elevation: "No elevation in this activity",
@@ -454,7 +459,11 @@ const chartRenderer: LayerRenderer<ChartLayer> = {
     const { w, h } = fixed(layer, 880, 280);
     const data: ChartData = {
       hr: env.series?.hr,
-      hrMax: env.series?.hrMax,
+      // This line was missing, and that is why the zones chart has never drawn. App.jsx has
+      // been supplying `zones` all along; the only ChartData ever built dropped it, so
+      // chartHasData("zones") always failed and every zone design showed the fallback.
+      zones: env.series?.zones,
+      athleteHrMax: env.series?.athleteHrMax,
       splits: env.series?.splits,
       altitude: env.series?.altitude,
       effort: env.series?.effort,
