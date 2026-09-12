@@ -3,8 +3,8 @@
 // Charts are live, not static images (§5.8): each one draws in as time advances, so the
 // exported video replays the activity rather than fading a picture in.
 
-import type { ZoneBand } from "../data/stravaZones";
-import { zoneOfBands, zoneSharesFromBands } from "../data/stravaZones";
+import type { ZoneBand } from "../data/hr";
+import { zoneOfBands, zoneSharesFromBands } from "../data/hr";
 import { resample, smoothSeries } from "./geometry";
 import { fontStack } from "./text";
 

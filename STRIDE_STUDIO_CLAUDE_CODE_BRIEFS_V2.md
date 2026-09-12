@@ -399,6 +399,8 @@ PR title: "chore(fixtures): athlete zone data and activityHrMax field (§7.4)"
 **Modified (import path only, no behaviour):**
 - `src/engine/chartLayers.ts:6-7` — `../data/stravaZones` → `../data/hr`.
 - `src/model/fields.ts:4-5` — same.
+- `src/App.jsx:32` — `./data/stravaZones.ts` → `./data/hr.ts`. Found during execution; there
+  are **three** importers, not two. Deleting the module without this one breaks the build.
 
 > **Deviation from the brief, authorised by HANDOFF.md.** v2 says "Modified: none". That was
 > written when `stravaZones.ts` did not exist. Shipping `hr.ts` alongside it would leave two
