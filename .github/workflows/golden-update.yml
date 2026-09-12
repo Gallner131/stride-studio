@@ -55,6 +55,16 @@ jobs:
           REASON: ${{ inputs.reason }}
           TARGET_BRANCH: ${{ github.ref_name }}
         run: |
+          # The job runs in a container, so the checked-out workspace is owned by a
+          # different uid than the one git runs as here. Git then refuses to recognise it
+          # as a repository at all, and `git config` reports the confusing
+          # "fatal: not in a git directory" rather than anything about ownership. That is
+          # what failed the first ever run of this workflow, AFTER it had recorded all 354
+          # goldens. actions/checkout sets safe.directory for its own process; this step
+          # does not inherit it.
+          cd "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          echo "repo root: $(git rev-parse --show-toplevel)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A test/golden/__snapshots__
@@ -69,6 +79,10 @@ jobs:
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"
 
       - uses: actions/upload-artifact@v4
+        # Always. Recording takes the whole job; if the commit step fails the PNGs are
+        # still valid — they were produced in the pinned container, which is the only part
+        # of this that cannot be redone elsewhere. Without this they were simply lost.
+        if: always()
         with:
           name: goldens
           path: test/golden/__snapshots__/
