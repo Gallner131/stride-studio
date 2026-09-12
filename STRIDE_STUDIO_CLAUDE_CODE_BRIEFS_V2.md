@@ -203,9 +203,13 @@ This PR ships the fixture wrapper first, so A1-A5's goldens legitimately don't c
 
 #### Line references verified
 
-- `test/fixtures/activities.js:15-16` — the `FIXTURE_RUN`/`FIXTURE_WORKOUT` spread from `DEMO`.
-- `src/render.js:61` — `DEMO.hrMax = 178`.
-- `src/render.js:66` — `DEMO_WORKOUT.hrMax = 171`.
+> **Re-derived 12 Sep 2026.** The two `src/render.js` refs below never matched the repo, at
+> any commit: v2 wrote them as statements (`DEMO.hrMax = 178`), but `hrMax` has always been a
+> property inside the object literal. Corrected to the real line contents.
+
+- `test/fixtures/activities.js:16` — `export const FIXTURE_RUN = { ...DEMO, date: FIXED_DATE };`
+- `src/render.js:61` — `hrMax: 178, calories: 1420,` (inside the `DEMO` object literal)
+- `src/render.js:66` — `hrMax: 171, calories: 410,` (inside the `DEMO_WORKOUT` object literal)
 
 #### Change spec
 
@@ -227,17 +231,23 @@ import { DEMO, DEMO_WORKOUT } from "../../src/render.js";
 export const FIXED_DATE = "2026-09-04T06:42:00.000Z";
 
 /**
- * Athlete zone data used by fixtures. Represents an athlete with a true max of
- * approximately 190 bpm (5 lower-bound thresholds at 50/60/70/80/90% of max).
+ * Athlete zone data used by fixtures. An athlete with a true maximum of 190 bpm.
  *
- * These boundaries are chosen so that zone renderings on the demo activity look
- * approximately like the pre-A2 rendering did with `max_heartrate + 5`, keeping
- * golden drift minimal and reviewable.
+ * Shaped exactly as GET /athlete/zones returns it (conflict 1, settled in PR-A1):
+ * Z1 starts at 0 and Z5 has no ceiling. Not a five-tuple of lower bounds — that
+ * shape cannot say "and everything above 171", which is what Strava actually says.
  */
 export const FIXTURE_ATHLETE = {
   id: 12345,
   name: "Demo Athlete",
-  hrZones: [95, 114, 133, 152, 171],
+  hrMax: 190,
+  hrZones: [
+    { min: 0, max: 114 },
+    { min: 114, max: 133 },
+    { min: 133, max: 152 },
+    { min: 152, max: 171 },
+    { min: 171, max: Number.POSITIVE_INFINITY },
+  ],
 };
 
 /** Demo run: 21.1 km, route, splits, elevation, HR stream. */
@@ -322,9 +332,16 @@ describe("fixtures", () => {
     expect(FIXTURE_WORKOUT.hrMax).toBe(171);
   });
 
-  it("FIXTURE_ATHLETE has 5 zone boundaries", () => {
+  it("FIXTURE_ATHLETE carries five Strava-shaped bands", () => {
     expect(FIXTURE_ATHLETE.hrZones).toHaveLength(5);
-    expect(FIXTURE_ATHLETE.hrZones[0]).toBeLessThan(FIXTURE_ATHLETE.hrZones[4]);
+    expect(FIXTURE_ATHLETE.hrZones[0].min).toBe(0);
+    expect(FIXTURE_ATHLETE.hrZones[4].max).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("the athlete's maximum is not any activity's peak", () => {
+    // The whole bug in one assertion: 190 is the athlete, 178 is what this run hit.
+    expect(FIXTURE_ATHLETE.hrMax).toBe(190);
+    expect(FIXTURE_RUN.activityHrMax).toBe(178);
   });
 
   it("FIXTURE_SESSION bundles activity + athlete", () => {
@@ -372,12 +389,131 @@ PR title: "chore(fixtures): athlete zone data and activityHrMax field (§7.4)"
 #### Files
 
 **Added:**
-- `src/data/hr.ts` (~90 lines).
-- `test/unit/hr.test.ts` (~90 lines).
+- `src/data/hr.ts` (~150 lines) — absorbs `stravaZones.ts` wholesale and adds the resolver.
+- `test/unit/hr.test.ts` (~130 lines) — absorbs `stravaZones.test.ts`.
 
-**Modified:** none. Consumers (A2-A5) migrate over the next four PRs.
+**Deleted:**
+- `src/data/stravaZones.ts` — folded in, not rewritten.
+- `test/unit/stravaZones.test.ts` — its cases move across unchanged.
+
+**Modified (import path only, no behaviour):**
+- `src/engine/chartLayers.ts:6-7` — `../data/stravaZones` → `../data/hr`.
+- `src/model/fields.ts:4-5` — same.
+
+> **Deviation from the brief, authorised by HANDOFF.md.** v2 says "Modified: none". That was
+> written when `stravaZones.ts` did not exist. Shipping `hr.ts` alongside it would leave two
+> modules answering the same question with two different data models, which is the shape of
+> the bug this whole phase exists to remove. The handoff's instruction — "fold the parser into
+> `hr.ts` rather than keeping two modules" — is followed here. The four changed import lines
+> carry no behaviour.
 
 #### Change spec
+
+> ### Conflict 1, settled: bands, not boundaries
+>
+> **v2's `Zones { boundaries: [n,n,n,n,n] }` is not used. `hr.ts` keeps the `ZoneBand {min, max}`
+> model that `stravaZones.ts` already ships.** Three reasons, in the order they matter:
+>
+> 1. **A five-tuple of lower bounds cannot express the top zone.** Strava marks Z5 as
+>    open-ended (`max: -1`), which the existing parser correctly reads as `Infinity`. With
+>    boundaries, A2's own change spec has to invent a ceiling — `hi = z < 4 ? bounds[z+1] : max`,
+>    where `max` is the highest point of the drawn trace. That is a derived number standing in
+>    for a real one, on a chart whose entire purpose is to report real ones.
+> 2. **`boundaries[0]` means two different things, which is what the handoff flagged.** v2's
+>    fixture sets it to 95 (50 % of max); Strava's Z1 `min` is **0**. Under the band model the
+>    question does not arise — Z1 starts where Strava says it starts.
+> 3. **It is the model already written, tested and shipped.** `parseHeartRateZones` verifies
+>    the payload shape rather than trusting it, and handles the three shapes the endpoint might
+>    return. Replacing it with a tuple would throw that away.
+>
+> **Consequence for user-set zones:** when the athlete has no Strava zones and has typed a max
+> HR into Settings, synthesise bands at 50/60/70/80/90 % — but with **`Z1.min = 0`** and
+> **`Z5.max = Infinity`**, so both sources produce the same geometry and a chart looks the same
+> however the zones were obtained. Do not put `0.5 × max` in Z1's floor: nothing measures it,
+> and it would make the first band's height depend on the source.
+>
+> **What this changes elsewhere:** A1's `Zones`/`boundaries` type disappears from A2's change
+> spec (already updated), and A2's rings site needs the athlete's true maximum as its own
+> field, `ChartData.athleteHrMax`, because no band carries it.
+
+`src/data/hr.ts` — the parser and the two lookups move across from `stravaZones.ts`
+unchanged, including their comments. What is new is the resolver and `ZONE_META`:
+
+```ts
+// Central heart-rate zone resolution — §7.4.
+//
+// Zones come from ONE source of truth, resolved at read time:
+//   1. The athlete's own zones from Strava's /athlete/zones
+//   2. Bands synthesised from prefs.hrMax, if they set one in Settings
+//   3. undefined — and then nothing zone-dependent is drawn at all
+//
+// It is a bug to derive zones from an activity's peak heart rate. The peak reached
+// during ONE run is not the athlete's maximum, and using it as one falsifies every
+// zone percentage downstream. That is what this module exists to end.
+
+export type ZoneSource = "strava" | "user";
+
+export interface Zones {
+  bands: ZoneBand[];
+  source: ZoneSource;
+}
+
+export interface ZonePrefs {
+  hrMax?: number | null;
+}
+
+export interface Athlete {
+  /** Bands as returned by GET /athlete/zones. */
+  hrZones?: ZoneBand[];
+  /** The athlete's true maximum, if we know it. Not any activity's peak. */
+  hrMax?: number | null;
+}
+
+/** The five percentages Settings implies when the athlete gives us only a maximum. */
+const USER_ZONE_FLOORS = [0, 0.6, 0.7, 0.8, 0.9];
+
+/**
+ * Bands from a single maximum. Z1 starts at 0 and Z5 has no ceiling, matching the
+ * shape Strava returns, so a chart drawn from these is identical in geometry to one
+ * drawn from the athlete's real zones.
+ */
+export function bandsFromMax(max: number): ZoneBand[] {
+  return USER_ZONE_FLOORS.map((floor, i) => ({
+    min: floor * max,
+    max: i === USER_ZONE_FLOORS.length - 1 ? Number.POSITIVE_INFINITY : USER_ZONE_FLOORS[i + 1] * max,
+  }));
+}
+
+export function resolveZones(prefs: ZonePrefs, athlete: Athlete | null): Zones | undefined {
+  if (athlete?.hrZones?.length) return { bands: athlete.hrZones, source: "strava" };
+  if (prefs.hrMax && prefs.hrMax > 0) return { bands: bandsFromMax(prefs.hrMax), source: "user" };
+  return undefined;
+}
+
+/**
+ * The athlete's true maximum, or null. Separate from `resolveZones` on purpose: the
+ * rings chart needs a denominator, and no band carries one — Strava's top zone is
+ * open-ended. Callers that cannot get a number here must not invent one.
+ */
+export function resolveAthleteHrMax(prefs: ZonePrefs, athlete: Athlete | null): number | null {
+  return athlete?.hrMax ?? prefs.hrMax ?? null;
+}
+
+/**
+ * Display metadata per zone. Formerly `ZONES` in render.js, which returned this shape
+ * from `zoneOf`. PR-A5's compat shim reads `.c` and `.name` from here.
+ */
+export const ZONE_META: ReadonlyArray<{ n: number; name: string; c: string }> = [
+  { n: 1, name: "Recovery", c: "#8FA3B5" },
+  { n: 2, name: "Easy", c: "#4FC1E9" },
+  { n: 3, name: "Aerobic", c: "#7BE495" },
+  { n: 4, name: "Threshold", c: "#FFB347" },
+  { n: 5, name: "Max", c: "#FF5A5F" },
+] as const;
+```
+
+<details>
+<summary>Superseded: v2's original <code>boundaries</code>-based listing, kept for reference</summary>
 
 `src/data/hr.ts`:
 
@@ -475,7 +611,73 @@ export const ZONE_META: ReadonlyArray<{ n: number; name: string; c: string }> = 
 ] as const;
 ```
 
+</details>
+
 #### Test-first spec
+
+Carry every case in `test/unit/stravaZones.test.ts` across unchanged — the parser is not
+being rewritten, so its coverage must not lapse — then add the resolver cases below.
+
+```ts
+import { describe, expect, it } from "vitest";
+import { bandsFromMax, resolveAthleteHrMax, resolveZones } from "../../src/data/hr";
+import { FIXTURE_ATHLETE } from "../fixtures/activities.js";
+
+describe("resolveZones", () => {
+  it("returns undefined when there is no source of truth", () => {
+    expect(resolveZones({}, null)).toBeUndefined();
+  });
+
+  it("prefers the athlete's own Strava zones over a typed-in maximum", () => {
+    const zones = resolveZones({ hrMax: 200 }, FIXTURE_ATHLETE);
+    expect(zones?.source).toBe("strava");
+    expect(zones?.bands).toBe(FIXTURE_ATHLETE.hrZones);
+  });
+
+  it("falls back to bands synthesised from prefs.hrMax", () => {
+    const zones = resolveZones({ hrMax: 190 }, null);
+    expect(zones?.source).toBe("user");
+    expect(zones?.bands).toHaveLength(5);
+  });
+
+  it("never consults an activity — there is no parameter for one", () => {
+    // Conflict 1: the signature itself is the guarantee. An activity's peak cannot
+    // reach this function, so it cannot become a zone ceiling by accident again.
+    expect(resolveZones.length).toBe(2);
+  });
+});
+
+describe("bandsFromMax", () => {
+  const bands = bandsFromMax(190);
+
+  it("starts Z1 at zero, like Strava does", () => {
+    // Not 0.5 x max. Nothing measures that floor, and using it would make the first
+    // band's height depend on where the zones came from.
+    expect(bands[0].min).toBe(0);
+  });
+
+  it("leaves Z5 open-ended, like Strava does", () => {
+    expect(bands[4].max).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("is contiguous — each band starts where the last one ended", () => {
+    for (let i = 1; i < bands.length; i++) expect(bands[i].min).toBe(bands[i - 1].max);
+  });
+});
+
+describe("resolveAthleteHrMax", () => {
+  it("is null when nobody has told us the athlete's maximum", () => {
+    expect(resolveAthleteHrMax({}, null)).toBeNull();
+  });
+
+  it("does not fall back to a nominal 190", () => {
+    expect(resolveAthleteHrMax({ hrMax: null }, { hrZones: [] })).toBeNull();
+  });
+});
+```
+
+<details>
+<summary>Superseded: v2's original <code>boundaries</code>-based tests, kept for reference</summary>
 
 `test/unit/hr.test.ts`:
 
@@ -550,6 +752,8 @@ describe("ZONE_META", () => {
 });
 ```
 
+</details>
+
 #### Golden matrix impact
 
 None — no rendering code touched.
@@ -566,13 +770,24 @@ None — no rendering code touched.
 ```
 Execute PR-A1 from BRIEFS_V2.md section 2. Add the central HR zone resolver at src/data/hr.ts.
 
-Copy the exact code and tests from the brief.
+Read the "Conflict 1, settled" box FIRST. The resolver uses the ZoneBand {min, max} model,
+NOT the `boundaries: [n,n,n,n,n]` tuple in the superseded listing further down. The collapsed
+<details> blocks are history — do not implement them.
 
-Do NOT modify any other file. Downstream consumers (chartLayers, fields, App.jsx, render.js, gpx.ts) are updated in PRs A2-A5.
+This PR folds src/data/stravaZones.ts into src/data/hr.ts and deletes it, per HANDOFF.md.
+Move parseHeartRateZones, zoneOfBands and zoneSharesFromBands across UNCHANGED, comments and
+all — they are correct and tested; this is a move, not a rewrite. Carry every case from
+test/unit/stravaZones.test.ts into test/unit/hr.test.ts, then delete the old test file.
 
-Note the ZONE_META export — this replaces the legacy ZONES constant in render.js so callers that used .c or .name (render.js lines 749, 757) have somewhere to go in PR-A5.
+Re-point the two importers (src/engine/chartLayers.ts:6-7, src/model/fields.ts:4-5). That is
+the only change to those files in this PR — import paths, no behaviour. Everything else in
+them belongs to A2 and A3.
+
+Note the ZONE_META export — this replaces the legacy ZONES constant in render.js so callers
+that used .c or .name (render.js lines 749, 757) have somewhere to go in PR-A5.
 
 Verify: npm test test/unit/hr.test.ts && npm run typecheck && npm run lint
+Confirm nothing still imports stravaZones: grep -rn "stravaZones" src/ test/ → no results.
 
 PR title: "feat(data): central HR zone resolver (§7.4)"
 ```
@@ -593,20 +808,47 @@ v1 addressed lines 158 and 428 only. It missed 171-172, 209, and 484. All five s
 #### Files
 
 **Modified:**
-- `src/engine/chartLayers.ts` — five sites changed, `ChartData.hrMax?` replaced by `ChartData.zones?`.
-- `test/unit/chartLayers.test.ts` — new file, ~140 lines.
+- `src/engine/chartLayers.ts` — three sites left (see below), `ChartData.hrMax?` deleted, `athleteHrMax?` added.
+- `src/engine/layers.ts` — thread `zones` through `env.series` into `ChartData`, and fix the
+  `CHART_REASON` copy for `zones`. Both engine, so rule 5 still holds.
+
+**Added:**
+- `test/unit/chartLayers.test.ts` (~140 lines).
 
 #### Line references verified
 
-All from `src/engine/chartLayers.ts`:
-- `:33` — `hrMax?: number;` on `ChartData` → replace with `zones?: Zones`.
-- `:77-84` — local `zoneOf` → delete, import from `../data/hr`.
-- `:87-92` — local `zoneShares` → delete, import from `../data/hr`.
-- `:158` — `const hrMax = data.hrMax ?? Math.max(...raw) + 5;` in `drawHr`.
-- `:171-172` — `const lo = (0.5 + z * 0.1) * hrMax; const hi = (0.6 + z * 0.1) * hrMax;` — band computation must switch to explicit zone boundaries.
-- `:209` — `ctx.strokeStyle = style.zoneColors[zoneOf(series[i] ?? min, hrMax)] ?? style.color;` — colour-by-HR stroke.
-- `:428` — `const shares = zoneShares(hr, data.hrMax ?? Math.max(...hr) + 5);` in `drawZones`.
-- `:484` — `const max = data.hrMax ?? 190;` in `drawRings`.
+> **Re-derived 12 Sep 2026. Two of the five sites are already done.** `81d0816` deleted the
+> local `zoneOf`/`zoneShares`, added `ChartData.zones?: ZoneBand[]`, and migrated the
+> colour-by-zone stroke and `drawZones`. Three sites remain, all still dividing by a number
+> that is not the athlete's maximum. The brief's old `:33/:77-84/:87-92/:158/:171-172/:209/:428/:484`
+> numbering is dead — use the list below.
+
+Still wrong, in `src/engine/chartLayers.ts`:
+- `:151` — `const hrMax = data.hrMax ?? Math.max(...raw) + 5;` in `drawHr`. Exists only to feed the bands below. Delete it.
+- `:164` — `const lo = (0.5 + z * 0.1) * hrMax;` — band lower edge as a percentage of that number.
+- `:165` — `const hi = (0.6 + z * 0.1) * hrMax;` — band upper edge.
+- `:482` — `const max = data.hrMax ?? 190;` in `drawRings`, then `const v = (data.avgHr ?? 0) / max;`.
+- `:39` — `hrMax?: number;` on `ChartData`. Delete. Its doc comment already says it must never be used as a zone ceiling, and the two sites above are doing exactly that — one field doing two jobs.
+
+Already correct, do not touch:
+- `:92` — `chartHasData` for `"zones"` already requires `(data.zones?.length ?? 0) > 0`.
+- `:202-203` — the colour-by-zone stroke already uses `zoneOfBands(…, data.zones ?? [])`.
+- `:425-426` — `drawZones` already uses `zoneSharesFromBands` and **returns without drawing** when there are no zones.
+
+And one thing neither v1 nor v2 noticed:
+
+- `src/engine/layers.ts:455` — `const data: ChartData = {`
+- `src/engine/layers.ts:457` — `hrMax: env.series?.hrMax,`
+- `src/engine/layers.ts:444` — `zones: "No heart rate in this activity",`
+- `src/App.jsx:182` — `zones: zoneBands ?? undefined,`
+
+That `ChartData` literal is the only one ever constructed, and it has no `zones` key. The
+`series` type at `:42-53` declares no `zones` field either, so what App.jsx supplies is
+dropped at the type boundary. **The zones chart and the colour-by-zone HR trace are dead in
+the data-driven template path today**: the gate always fails and the layer renders
+`CHART_REASON.zones`, which blames a missing heart-rate stream when the stream is present
+and the athlete's zones are what is missing. Threading that one field, and fixing that copy,
+is part of A2.
 
 #### Change spec
 
@@ -718,56 +960,86 @@ export function drawHr(...): void {
 }
 ```
 
-**4) `drawZones` (line ~420):**
+**4) `drawZones` — SUPERSEDED. Do not implement the block below.**
 
-```ts
-// BEFORE
-export function drawZones(...): void {
-  const hr = data.hr ?? [];
-  if (hr.length === 0) return;
-  const shares = zoneShares(hr, data.hrMax ?? Math.max(...hr) + 5);
-  ...
-}
+> **Settled 12 Sep 2026 — conflict 2.** This is the one place where executing the brief as
+> written would make the code worse. `drawZones` already does the right thing at `:425-426`:
+>
+> ```ts
+> const shares = zoneSharesFromBands(hr, data.zones ?? []);
+> if (!shares) return;
+> ```
+>
+> Adding the placeholder would put the string **on the canvas**, which means inside the
+> exported PNG and inside the exported Instagram story. A chrome message does not belong in
+> the artwork. The copy is also wrong for the larger group of affected users: someone whose
+> zones come from Strava has no max-HR setting to fill in — they need to reconnect, which is
+> what the Strava panel already tells them (`src/App.jsx:1009`).
+>
+> **The rule for the whole codebase: a missing value draws nothing on the canvas and explains
+> itself in the DOM.** The layer engine already has the mechanism — `CHART_REASON` in
+> `src/engine/layers.ts:443-450`. A2's job there is to make its `zones` entry tell the truth:
+>
+> ```ts
+> // BEFORE — blames the HR stream, which is present
+> zones: "No heart rate in this activity",
+> // AFTER
+> zones: "Connect Strava or set your max heart rate to see zones",
+> ```
+>
+> Leave `drawZones` alone apart from the import path.
 
-// AFTER
-export function drawZones(...): void {
-  const hr = data.hr ?? [];
-  if (hr.length === 0 || !data.zones) {
-    // Placeholder: "Set your max HR in Settings to see zones"
-    ctx.fillStyle = style.textColor ?? "#666";
-    ctx.font = style.font ?? "500 14px system-ui";
-    ctx.textAlign = "center";
-    ctx.fillText("Set your max HR in Settings to see zones", w / 2, h / 2);
-    return;
-  }
-  const shares = zoneShares(hr, data.zones);
-  ...
-}
-```
-
-**5) `drawRings` (line ~484):**
+**5) `drawRings` (`:481-483`):**
 
 ```ts
 // BEFORE
 const max = data.hrMax ?? 190;
+const v = (data.avgHr ?? 0) / max;
 
 // AFTER
-// Rings use effort from data.effort (already-computed). If zones are absent,
-// we can still draw the ring at its saved effort value; the zone-tinted arc
-// simply defaults to the neutral fill.
-const zones = data.zones;
+// The Avg HR ring shows intensity, so its denominator has to be the athlete's
+// maximum. It was this activity's peak, which normalises every run against
+// itself: a recovery jog and a 5k time trial fill the ring about equally, and
+// when there was no peak at all it invented 190. Zones cannot supply it — the
+// top band is open-ended — so the resolver passes the real number or nothing.
+const max = data.athleteHrMax;
+const v = max ? (data.avgHr ?? 0) / max : 0;
 ```
 
-Update any usage in `drawRings` that referenced `max` to check `zones` instead. If effort ring uses zoneOf, replace with `zones ? zoneOf(...) : 2` (fallback to neutral middle zone for the arc colour lookup).
+With no athlete maximum the ring reads its bpm figure with an empty arc, which is honest:
+we know the average, we do not know what fraction of their capacity it represents. This is
+the same rule as conflict 2 — show what is real, leave the rest blank, say why in the DOM.
 
-**6) `chartHasData` for `"zones"` (find in file, likely near line 50):**
+`ChartData` changes accordingly: delete `hrMax?: number` (`:39`), add
 
 ```ts
-// BEFORE
-if (kind === "zones") return (data.hr?.length ?? 0) > 1;
+/** The athlete's true maximum, from the resolver. Not this activity's peak. */
+athleteHrMax?: number;
+```
 
-// AFTER
-if (kind === "zones") return (data.hr?.length ?? 0) > 1 && data.zones !== undefined;
+**6) `chartHasData` for `"zones"` — already done.** `:90-92` reads:
+
+```ts
+case "zones":
+  // Without the athlete's real zones there is nothing honest to draw.
+  return (data.hr?.length ?? 0) > 1 && (data.zones?.length ?? 0) > 0;
+```
+
+No change. The reason it has never been observed working is the `layers.ts` gap above.
+
+**7) `src/engine/layers.ts` — connect the two ends:**
+
+```ts
+// :42-53, the series type
+zones?: ZoneBand[];        // ADD
+hrMax?: number;            // → athleteHrMax?: number
+
+// :455-463, the only ChartData ever built
+zones: env.series?.zones,              // ADD — this is the missing wire
+athleteHrMax: env.series?.athleteHrMax, // was hrMax: env.series?.hrMax
+
+// :444, CHART_REASON
+zones: "Connect Strava or set your max heart rate to see zones",
 ```
 
 #### Test-first spec
@@ -802,23 +1074,30 @@ describe("chartHasData for zone-dependent charts", () => {
   });
 });
 
-describe("drawZones placeholder when zones absent", () => {
-  it("writes 'Set your max HR' text when zones undefined", () => {
+describe("drawZones draws nothing without zones", () => {
+  // Conflict 2, settled: no explanatory text is ever painted onto the canvas, because the
+  // canvas is the exported artwork. Absence is silent here and explained in the DOM.
+  it("paints nothing at all when zones are absent", () => {
     const ctx = mockCtx();
     drawZones(ctx, { hr: [120, 130] }, defaultStyle(), {}, 400, 200);
-    expect(ctx.fillText).toHaveBeenCalledWith(
-      "Set your max HR in Settings to see zones",
-      200, 100,
-    );
+    expect(ctx.fillText).not.toHaveBeenCalled();
+    expect(ctx.fillRect).not.toHaveBeenCalled();
+    expect(ctx.fill).not.toHaveBeenCalled();
   });
 
-  it("does NOT write the placeholder when zones present", () => {
+  it("draws the bars when zones are present", () => {
     const ctx = mockCtx();
     drawZones(ctx, { hr: [120, 130], zones }, defaultStyle(), {}, 400, 200);
-    expect(ctx.fillText).not.toHaveBeenCalledWith(
-      expect.stringContaining("Set your max HR"),
-      expect.anything(), expect.anything(),
-    );
+    expect(ctx.fillRect).toHaveBeenCalled();
+  });
+});
+
+describe("zones reach the chart from the layer engine", () => {
+  // The regression this is here to stop: App.jsx supplies `zones`, chartLayers consumes
+  // `zones`, and for a whole release layers.ts silently dropped it in between.
+  it("chartHasData sees zones threaded through a ChartData built by layers.ts", () => {
+    const data: ChartData = { hr: [120, 130, 140], zones };
+    expect(chartHasData("zones", data)).toBe(true);
   });
 });
 
@@ -840,13 +1119,24 @@ function defaultStyle(): any {
 
 #### Golden matrix impact
 
-**None expected** if PR-A0 fixtures set `athlete.hrZones` and callers (in A4) thread the resolved zones into `ChartData.zones` before calling any draw fn. Since A2 lands before A4, the golden matrix will show the "Set your max HR" placeholder text on every zone-chart golden — which is expected during A2 → A4 transition and re-recorded in A4.
+**None — and not for the reason this brief assumed.**
 
-Options to keep the golden matrix clean during transition:
-1. Land A2 and A4 in a single day so goldens are only regenerated once.
-2. Merge A2 with `golden-update` label and re-record after A4.
-
-Recommended: option 1.
+> **Corrected 12 Sep 2026.** The golden matrix cannot see this PR at all.
+> `test/golden/harness.html:19-26` imports `DEFAULT_OPTS, FORMATS, renderFrame, setFormat,
+> TEMPLATES` from `src/render.js` plus the fixtures, and nothing else. `src/render.js` has
+> **zero import statements** — it is entirely self-contained legacy code. So all 354 cells
+> measure the legacy switch-case renderer and only that. `src/engine/**`, `src/model/**`,
+> `src/App.jsx` and `src/looks/**` are outside the fence.
+>
+> The transition plan this section used to recommend — "land A2 and A4 the same day so the
+> goldens only regenerate once" — is therefore unnecessary. A2, A3 and A4 can land
+> independently, in any order, and the goldens will not move.
+>
+> The wider consequence is worth carrying into every other brief: **"`npm run test:golden` —
+> zero diff" is a real check only for PRs that touch `src/render.js`.** On the critical path
+> that is A0 (additive, so no pixels), A5 and A6. Everywhere else the criterion passes
+> trivially and proves nothing. It is not a substitute for a unit test on the code you
+> actually changed.
 
 #### Acceptance criteria
 
@@ -892,14 +1182,27 @@ PR title: "feat(engine): chartLayers uses central zone resolver, all 5 sites (§
 #### Files
 
 **Modified:**
-- `src/model/fields.ts` — signature change: `buildFields(activity, opts, zones?)`.
-- `test/unit/fields.test.ts` (new, ~90 lines).
+- `src/model/fields.ts` — re-point the zone import at `../data/hr`; rename `LegacyActivity.hrMax` → `activityHrMax`.
+
+**Added:**
+- `test/unit/fields.test.ts` (~90 lines).
 
 #### Line references verified
 
-- `src/model/fields.ts:3` — `import { ..., zoneShares } from "../render.js";` — remove `zoneShares` from this import.
-- `src/model/fields.ts:14` — `hrMax: number | null;` on `LegacyActivity` interface — keep for A3, rename to `activityHrMax` in A5.
-- `src/model/fields.ts:49-56` — the `if (act.hrStream?.length)` block.
+> **Re-derived 12 Sep 2026 — most of this brief has already landed.** The 11–12 Sep HR fix
+> (`81d0816`) removed `zoneShares` from the `render.js` import, added the third
+> `zones: ZoneBand[] | null` parameter to `buildFields`, and replaced the `act.hrMax || 190`
+> division with `zoneSharesFromBands`. The comment at `:56-59` records why. What is left for
+> A3 is only the two items in **Files** above. The Change spec's BEFORE block below no longer
+> exists in the repo — read it as history, not as the current state.
+
+- `src/model/fields.ts:4` — `import type { ZoneBand } from "../data/stravaZones";` — becomes `from "../data/hr"` once A1 folds the module in.
+- `src/model/fields.ts:17` — `hrMax?: number | null;` on `LegacyActivity` — rename to `activityHrMax`.
+- `src/model/fields.ts:60` — `const shares = act.hrStream?.length ? zoneSharesFromBands(act.hrStream, zones ?? []) : null;` — already correct; only the import path moves.
+
+Note that the *field key* `hrMax` at `:42` stays. It is a display binding — two templates
+render `{hrMax}` (`src/templates/index.ts:2086`, `:2281`) and they mean "the peak this run
+reached", which is exactly what `activityHrMax` holds. Renaming the key would break them.
 
 #### Change spec
 
@@ -1060,10 +1363,16 @@ This PR:
 
 #### Line references verified
 
-- `src/App.jsx:80` — `<input type="number" placeholder="e.g. 185" defaultValue={act.hrMax || ""} onChange={(e) => upd({ hrMax: parseInt(e.target.value, 10) || null })} />`
-- `src/App.jsx:164` — `const max = a.hrMax || 190;`
-- `src/App.jsx:177` — `hrMax: a.hrMax || undefined,`
-- `src/App.jsx:496` — `hrMax: a.max_heartrate ? Math.round(a.max_heartrate) + 5 : 190,`
+> **Re-derived 12 Sep 2026.** All four references moved — App.jsx grew by one line above the
+> ManualForm input and by thirty in the Strava importer. The last one also changed in
+> substance: `81d0816` already deleted the `+ 5` and the `: 190` fallback from the Strava
+> import, so that site now stores the honest per-activity peak and only needs renaming. The
+> `|| 190` at the effort-scoring site is still live and is still the bug.
+
+- `src/App.jsx:81` — `defaultValue={act.hrMax || ""}` — the Max HR input inside `ManualForm` (was `:80`).
+- `src/App.jsx:168` — `const max = a.hrMax || 190;` — effort scoring, still derives from the activity peak (was `:164`).
+- `src/App.jsx:181` — `hrMax: a.hrMax || undefined,` — series field (was `:177`).
+- `src/App.jsx:526` — `hrMax: a.max_heartrate ? Math.round(a.max_heartrate) : null,` — Strava import; the `+ 5` and `190` are already gone, so this is a rename to `activityHrMax`, not a fix (was `:496`).
 
 #### Change spec
 
@@ -1498,7 +1807,7 @@ v1 said "delete render.js zoneOf". But render.js:749 and :757 use `.c` and `.nam
 - `src/render.js:280` — `export function zoneOf(bpm, max)`.
 - `src/render.js:281-286` — `export function zoneShares(stream, max)`.
 - `src/render.js:749` — `ctx.strokeStyle = zoneOf(hs[i], hrMax).c;`.
-- `src/render.js:757` — `ctx.fillStyle = zoneOf(shown, hrMax).c; ... zoneOf(shown, hrMax).name`.
+- `src/render.js:757` — `ctx.fillStyle = zoneOf(shown, hrMax).c;` — and the same line calls `zoneOf(shown, hrMax).name` further along, so the compat shim must carry both `.c` and `.name`. (The elision the brief used here, `... zoneOf(...)`, is not a substring of anything and so could never verify.)
 - `src/render.js:764` — `const shares = zoneShares(act.hrStream, hrMax);`.
 - `src/data/gpx.ts:24` — `hrMax: number | null;` on ImportedActivity.
 - `src/data/gpx.ts:336` — `hrMax: hrValues.length > 0 ? Math.max(...hrValues) : null,`.
@@ -1687,9 +1996,13 @@ v1 covered `fmtPace` in render.js only. But `src/model/fields.ts:60-64` has its 
 
 #### Line references verified
 
-- `src/render.js:19` — `export const fmtPace = (sec) => { ... }` (approximate; scroll to find).
+> **Re-derived 12 Sep 2026.** `fmtPace` had an elision (`{ ... }`) that is not a substring of
+> any line, and `fmtTimeFromPace` moved to the bottom of `fields.ts` when the zone block was
+> rewritten on 11 Sep.
+
+- `src/render.js:19` — `export const fmtPace = (sec) => {` — body at `:20-22`; the bug is `const m = Math.floor(sec / 60), s = Math.round(sec % 60);` at `:21`, deriving minutes and seconds independently.
 - `src/render.js:24-26` — `fmtDate` / `fmtDateLong` / `fmtClock`.
-- `src/model/fields.ts:60-64` — `fmtTimeFromPace`.
+- `src/model/fields.ts:72` — `function fmtTimeFromPace(sec: number): string {` — the local guard, called once at `:49` (was `:60-64`).
 
 #### Change spec
 
@@ -1833,13 +2146,20 @@ PR title: "fix(render): fmtPace 4:60, Invalid Date, remove fmtTimeFromPace dupli
 #### Files
 
 **Modified:**
-- `src/App.jsx:483-490` — compute `droppedSplitMetres` when importing from Strava; add to activity.
+- `src/App.jsx:510-512` — compute `droppedSplitMetres` when importing from Strava; add to activity.
 - A visible note in the Designs tab area or below the stage.
-- `test/e2e/splits-note.spec.ts` (new, ~40 lines).
+
+**Added:**
+- `test/e2e/splits-note.spec.ts` (~40 lines).
 
 #### Line references verified
 
-- `src/App.jsx:483-485` — `const splits = (dd.splits_metric ?? []).filter((sp) => sp.distance > 200).map(...)`
+> **Re-derived 12 Sep 2026.** The Strava importer moved down ~27 lines. The brief also wrote
+> the three chained calls as one line; they are three.
+
+- `src/App.jsx:510` — `const splits = (dd.splits_metric ?? [])`
+- `src/App.jsx:511` — `.filter((sp) => sp.distance > 200)` — this is the drop; the tail metres it discards are what the note must surface.
+- `src/App.jsx:512` — `.map((sp) => sp.moving_time / (sp.distance / 1000));`
 
 #### Change spec
 
@@ -2073,9 +2393,17 @@ PR title: "feat(chrome): CSS variables + warm-neutral chrome (§6.14)"
 
 **Modified:**
 - `src/App.jsx` — two useEffects (sync `--accent`, sync `dataset.theme`).
-- `src/ui/Settings.tsx` — add theme toggle Row.
 - `src/storage/db.ts` — extend Prefs with `theme?: "light" | "dark" | "auto"`.
-- `src/util/contrast.ts` (new, ~30 lines) — computes contrasting text colour for any accent hex.
+
+**Added:**
+- `src/util/contrast.ts` (~30 lines) — computes contrasting text colour for any accent hex.
+
+**Created by a precondition, modified here:**
+- `src/ui/Settings.tsx` — add theme toggle Row. **PR-A4.5 creates this file**, and A4.5 sits
+  behind A5 on the critical path, so A9 cannot land until it does. If you want the light
+  redesign sooner than the HR work allows, either pull A4.5 forward (it is self-contained,
+  and A4 needs somewhere to put `prefs.hrMax` anyway) or split A9: land the `--accent` sync
+  and `contrast.ts` now, add the toggle row when Settings exists.
 
 #### Change spec
 
@@ -2294,7 +2622,9 @@ PR title: "feat(defaults): warm 'paper' look and 'session' template on first loa
 **Modified:**
 - `src/storage/db.ts` — add `onboardingSeen: boolean` to Prefs.
 - `src/App.jsx` — render Onboarding when `!prefs.onboardingSeen`.
-- `src/ui/Settings.tsx` — add "Show onboarding again" button for QA.
+
+**Created by a precondition, modified here:**
+- `src/ui/Settings.tsx` — add "Show onboarding again" button for QA. Created by **PR-A4.5**.
 
 #### Change spec
 
@@ -4225,15 +4555,30 @@ PR title: "refactor(inspector): consistent section order across all layer types 
 
 #### Files
 
+> ## ⚠️ ALREADY DONE — do not execute this brief
+>
+> Landed 11–12 Sep 2026 in `81d0816` and `c17a932`, before the plan was picked up. The
+> `profile:read_all` scope is live, `/athlete/zones` is fetched on load, and
+> `src/data/stravaZones.ts` parses the response with `test/unit/stravaZones.test.ts` covering
+> it. The reconnect affordance exists too — inline in `src/App.jsx:1009`, not in a modal.
+>
+> One correction for the record: **`src/ui/StravaModal.tsx` has never existed**, at any
+> commit. v2 invented it. The Strava UI is inline in App.jsx.
+>
+> PR-A1 absorbs `stravaZones.ts` into `src/data/hr.ts`; after that this brief has nothing
+> left in it.
+
 **Modified:**
-- `api/strava/config.ts` — extend scope string to include `profile:read_all`.
-- `src/data/strava.ts` — after `completeSignIn`, fetch `/athlete/zones` and populate `session.athlete.hrZones`.
-- `src/ui/StravaModal.tsx` — for existing sessions missing the new scope, show "Reconnect for zone data" affordance.
-- `test/unit/strava.test.ts` — add zone-fetch case.
+- `api/strava/config.ts` — extend scope string to include `profile:read_all`. ✅ done
+- `src/data/strava.ts` — after `completeSignIn`, fetch `/athlete/zones`. ✅ done
+- `test/unit/strava.test.ts` — add zone-fetch case. ✅ done
+
+**Does not exist (v2 error):**
+- `src/ui/StravaModal.tsx` — the reconnect affordance lives in `src/App.jsx` instead.
 
 #### Line references verified
 
-- `api/strava/config.ts` — currently `scope: "read,activity:read_all"` (approximate).
+- `api/strava/config.ts` — the scope string.
 - `src/data/strava.ts` — the `completeSignIn` or `handleCallback` function.
 
 #### Change spec
@@ -6011,8 +6356,13 @@ PR title: "feat(image): background removal (§2.7)"
 #### Files
 
 **Modified:**
-- `src/model/formats.ts` — add `"post-3-4"` (900×1200 TikTok square) and `"landscape-16-9"` (1920×1080 YouTube thumb).
 - `src/App.jsx` — format Seg options list.
+
+**Created by a precondition, modified here:**
+- `src/model/formats.ts` — add `"post-3-4"` (900×1200 TikTok square) and `"landscape-16-9"`
+  (1920×1080 YouTube thumb). This file does not exist yet: `FORMATS` still lives in
+  `src/render.js`, and **PR-B12** is what extracts it. Until B12 lands, edit `src/render.js`
+  instead — or hold D8 behind B12, which is the phase order anyway.
 
 #### Change spec
 
@@ -6130,9 +6480,13 @@ PR title: "fix(autosave): dependency list + two-tab conflict warning (§8)"
 
 #### Files
 
+**Renamed:**
+- `src/App.jsx` → `src/App.tsx`. (The target is the output of this PR, not an input — listing
+  it as "Modified" is what made `verify:plan` flag this brief.)
+
 **Modified:**
-- `src/App.jsx` → `src/App.tsx` (rename).
-- Types added: `Activity`, `Series`, `Opts`, `Media`, `ExportResult` — import from `src/model/types.ts` where possible.
+- `src/model/types.ts` — reuse `Activity`, `Series`, `Opts`, `Media`, `ExportResult` from here
+  where they already exist; declare the rest locally in `App.tsx`.
 
 #### Change spec
 
@@ -6900,8 +7254,8 @@ PR title: "feat(auth): sign-out + delete-account (PB7)"
 - `src/data/billing.ts` — `getTier(user)`, `openCheckout(tier)`.
 - `supabase/migrations/002_subscriptions.sql` — subscriptions table.
 
-**Modified:**
-- `src/ui/Settings.tsx` — Billing section: current plan, upgrade button.
+**Created by a precondition, modified here:**
+- `src/ui/Settings.tsx` — Billing section: current plan, upgrade button. Created by **PR-A4.5**.
 
 #### Change spec
 
