@@ -1,0 +1,75 @@
+name: golden-update
+
+# Records the golden baseline inside the pinned container and commits it to the branch you
+# run it from (spec §12.2, §13 Phase 0 step 3).
+#
+# This exists because goldens cannot be recorded on a developer's laptop: the legacy
+# renderer draws with system fonts (§1.2 E3), so macOS-recorded PNGs fail every cell on a
+# Linux runner. This workflow IS the recording environment.
+#
+# Deliberately manual (workflow_dispatch) — re-recording the baseline is the one action that
+# can hide a real regression, so it never happens automatically.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why are the goldens being re-recorded? (goes in the commit message)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  TZ: UTC
+
+jobs:
+  record:
+    name: record goldens
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      GOLDEN_ENV: pinned
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - run: npm ci
+
+      - name: Record the baseline
+        run: npm run golden:update
+
+      - name: Summarise
+        run: |
+          count=$(ls test/golden/__snapshots__/*.png | wc -l)
+          size=$(du -sh test/golden/__snapshots__ | cut -f1)
+          echo "recorded $count goldens ($size)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the baseline
+        # REASON is passed through the environment, not interpolated into the script: the
+        # workflow input is free text and would otherwise be a shell injection.
+        env:
+          REASON: ${{ inputs.reason }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A test/golden/__snapshots__
+          if git diff --cached --quiet; then
+            echo "goldens unchanged — nothing to commit"
+            exit 0
+          fi
+          count=$(git diff --cached --name-only | wc -l)
+          printf 'test(golden): re-record baseline (%s files)\n\nReason: %s\n\nRecorded by the golden-update workflow inside\nmcr.microsoft.com/playwright:v1.63.0-noble (spec §12.2).\n' \
+            "$count" "$REASON" > /tmp/msg
+          git commit -F /tmp/msg
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goldens
+          path: test/golden/__snapshots__/
+          retention-days: 14
