@@ -14,7 +14,8 @@ interface LegacyActivity {
   distance?: number;
   elevation?: number;
   hr?: number | null;
-  hrMax?: number | null;
+  /** The peak reached during THIS activity. For display; never a zone ceiling. */
+  activityHrMax?: number | null;
   calories?: number | null;
   splits?: number[] | null;
   hrStream?: number[] | null;
@@ -39,7 +40,9 @@ export function buildFields(
     elevation: act.elevation ? Math.round(d.elevV) : null,
     elevUnit: d.elevU,
     hr: act.hr ?? null,
-    hrMax: act.hrMax ?? null,
+    // The binding key stays `hrMax` — two shipped designs print {hrMax} and mean the peak
+    // this run reached, which is what activityHrMax holds. Only the source field is renamed.
+    hrMax: act.activityHrMax ?? null,
     calories: act.calories ?? null,
     date: fmtDate(act.date),
     startTime: fmtClock(act.date),
