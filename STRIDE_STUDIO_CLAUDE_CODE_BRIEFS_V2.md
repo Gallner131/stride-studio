@@ -184,6 +184,14 @@ Twelve PRs (A0 through A11) plus five "extras" (A12–A16) that were missing fro
 
 ### PR-A0: Fixture prep for HR resolver
 
+> ## ✅ LANDED — 2a51c62
+>
+> Fixtures carry the athlete and the activity separately. Verified in the pinned container: `golden-update` on the branch reported "goldens unchanged — nothing to commit".
+>
+> Kept for the record. The file claims and
+> line references below describe the repo *before* this PR, so they are recorded as
+> history and no longer checked by `verify:plan`.
+
 **Branch:** `git checkout -b phase-a-00-hr-fixture-prep`
 **Rules:** 1, 4 (no new deps).
 **Preconditions:** none.
@@ -197,11 +205,11 @@ This PR ships the fixture wrapper first, so A1-A5's goldens legitimately don't c
 
 #### Files
 
-**Modified:**
+**Modified (landed):**
 - `test/fixtures/activities.js` (+60 / -3) — add `FIXTURE_ATHLETE`, add `activityHrMax` on both fixtures, keep legacy `hrMax` field with a deprecation comment so pre-A5 code still compiles.
 - `src/render.js` (+15 / -5) — add `activityHrMax` fields to `DEMO` and `DEMO_WORKOUT`. Leave `hrMax` in place (removed in A5).
 
-#### Line references verified
+#### Line references (as they were before this PR)
 
 > **Re-derived 12 Sep 2026.** The two `src/render.js` refs below never matched the repo, at
 > any commit: v2 wrote them as statements (`DEMO.hrMax = 178`), but `hrMax` has always been a
@@ -381,6 +389,14 @@ PR title: "chore(fixtures): athlete zone data and activityHrMax field (§7.4)"
 
 ### PR-A1: Central HR zone resolver
 
+> ## ✅ LANDED — 98427c4
+>
+> `src/data/hr.ts` exists and `stravaZones.ts` is folded into it. Note there were **three** importers, not the two this brief listed — `src/App.jsx:32` was the third.
+>
+> Kept for the record. The file claims and
+> line references below describe the repo *before* this PR, so they are recorded as
+> history and no longer checked by `verify:plan`.
+
 **Branch:** `git checkout -b phase-a-01-hr-zone-resolver`
 **Rules:** 6 (engine purity), 1.
 **Preconditions:** PR-A0.
@@ -388,15 +404,15 @@ PR title: "chore(fixtures): athlete zone data and activityHrMax field (§7.4)"
 
 #### Files
 
-**Added:**
+**Added (landed):**
 - `src/data/hr.ts` (~150 lines) — absorbs `stravaZones.ts` wholesale and adds the resolver.
 - `test/unit/hr.test.ts` (~130 lines) — absorbs `stravaZones.test.ts`.
 
-**Deleted:**
+**Deleted (landed):**
 - `src/data/stravaZones.ts` — folded in, not rewritten.
 - `test/unit/stravaZones.test.ts` — its cases move across unchanged.
 
-**Modified (import path only, no behaviour):**
+**Modified, import path only (landed):**
 - `src/engine/chartLayers.ts:6-7` — `../data/stravaZones` → `../data/hr`.
 - `src/model/fields.ts:4-5` — same.
 - `src/App.jsx:32` — `./data/stravaZones.ts` → `./data/hr.ts`. Found during execution; there
@@ -798,6 +814,14 @@ PR title: "feat(data): central HR zone resolver (§7.4)"
 
 ### PR-A2: Migrate chartLayers to central resolver — ALL FIVE call sites
 
+> ## ✅ LANDED — 6c82d33
+>
+> Three sites migrated, `ChartData.hrMax` deleted, and the missing `zones` wire in `layers.ts` connected — the zones chart draws for the first time.
+>
+> Kept for the record. The file claims and
+> line references below describe the repo *before* this PR, so they are recorded as
+> history and no longer checked by `verify:plan`.
+
 **Branch:** `git checkout -b phase-a-02-chartlayers-zones`
 **Rules:** 5 (engine only).
 **Preconditions:** PR-A0, PR-A1.
@@ -809,15 +833,15 @@ v1 addressed lines 158 and 428 only. It missed 171-172, 209, and 484. All five s
 
 #### Files
 
-**Modified:**
+**Modified (landed):**
 - `src/engine/chartLayers.ts` — three sites left (see below), `ChartData.hrMax?` deleted, `athleteHrMax?` added.
 - `src/engine/layers.ts` — thread `zones` through `env.series` into `ChartData`, and fix the
   `CHART_REASON` copy for `zones`. Both engine, so rule 5 still holds.
 
-**Added:**
+**Added (landed):**
 - `test/unit/chartLayers.test.ts` (~140 lines).
 
-#### Line references verified
+#### Line references (as they were before this PR)
 
 > **Re-derived 12 Sep 2026. Two of the five sites are already done.** `81d0816` deleted the
 > local `zoneOf`/`zoneShares`, added `ChartData.zones?: ZoneBand[]`, and migrated the
@@ -1184,7 +1208,8 @@ PR title: "feat(engine): chartLayers uses central zone resolver, all 5 sites (§
 #### Files
 
 **Modified:**
-- `src/model/fields.ts` — re-point the zone import at `../data/hr`; rename `LegacyActivity.hrMax` → `activityHrMax`.
+- `src/model/fields.ts` — rename `LegacyActivity.hrMax` → `activityHrMax`. (The import re-point
+  this brief used to own was done by PR-A1 when it folded `stravaZones.ts` into `hr.ts`.)
 
 **Added:**
 - `test/unit/fields.test.ts` (~90 lines).
@@ -1198,8 +1223,9 @@ PR title: "feat(engine): chartLayers uses central zone resolver, all 5 sites (§
 > A3 is only the two items in **Files** above. The Change spec's BEFORE block below no longer
 > exists in the repo — read it as history, not as the current state.
 
-- `src/model/fields.ts:4` — `import type { ZoneBand } from "../data/stravaZones";` — becomes `from "../data/hr"` once A1 folds the module in.
+- `src/model/fields.ts:4` — `import type { ZoneBand } from "../data/hr";` — already re-pointed by PR-A1.
 - `src/model/fields.ts:17` — `hrMax?: number | null;` on `LegacyActivity` — rename to `activityHrMax`.
+- `src/model/fields.ts:42` — `hrMax: act.hrMax ?? null,` — reads the renamed field; the *key* stays `hrMax`.
 - `src/model/fields.ts:60` — `const shares = act.hrStream?.length ? zoneSharesFromBands(act.hrStream, zones ?? []) : null;` — already correct; only the import path moves.
 
 Note that the *field key* `hrMax` at `:42` stays. It is a display binding — two templates
@@ -1806,11 +1832,14 @@ v1 said "delete render.js zoneOf". But render.js:749 and :757 use `.c` and `.nam
 
 #### Line references verified
 
-- `src/render.js:280` — `export function zoneOf(bpm, max)`.
-- `src/render.js:281-286` — `export function zoneShares(stream, max)`.
-- `src/render.js:749` — `ctx.strokeStyle = zoneOf(hs[i], hrMax).c;`.
-- `src/render.js:757` — `ctx.fillStyle = zoneOf(shown, hrMax).c;` — and the same line calls `zoneOf(shown, hrMax).name` further along, so the compat shim must carry both `.c` and `.name`. (The elision the brief used here, `... zoneOf(...)`, is not a substring of anything and so could never verify.)
-- `src/render.js:764` — `const shares = zoneShares(act.hrStream, hrMax);`.
+> **Re-derived 12 Sep 2026, again.** PR-A0 added ten lines to `src/render.js`, so every
+> reference below moved by +10. Re-derive after any other `render.js` change.
+
+- `src/render.js:290` — `export function zoneOf(bpm, max)` (was `:280`).
+- `src/render.js:291-296` — `export function zoneShares(stream, max)` (was `:281-286`).
+- `src/render.js:759` — `ctx.strokeStyle = zoneOf(hs[i], hrMax).c;` (was `:749`).
+- `src/render.js:767` — `ctx.fillStyle = zoneOf(shown, hrMax).c;` — and the same line calls `zoneOf(shown, hrMax).name` further along, so the compat shim must carry both `.c` and `.name`. (The elision the brief used here, `... zoneOf(...)`, is not a substring of anything and so could never verify.)
+- `src/render.js:774` — `const shares = zoneShares(act.hrStream, hrMax);` (was `:764`).
 - `src/data/gpx.ts:24` — `hrMax: number | null;` on ImportedActivity.
 - `src/data/gpx.ts:336` — `hrMax: hrValues.length > 0 ? Math.max(...hrValues) : null,`.
 - `src/data/gpx.ts:389` — `hrMax: imported.hrMax ? imported.hrMax + 5 : null,`.
