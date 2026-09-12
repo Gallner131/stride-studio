@@ -35,11 +35,35 @@ reconcile:
 | PR-C1 (Strava `profile:read_all` + `/athlete/zones`) | **Already done.** Scope is live; `src/data/stravaZones.ts` parses the response. |
 | PR-A2 (chartLayers) | **Partially done.** `zoneOf`/`zoneShares` deleted from the engine and the zones chart migrated — but `:151`, `:164-165` and `:482` still derive zones from a max-HR number, exactly as §1.2 says. |
 | PR-A3 (fields.ts) | **Partially done.** Uses real bands; still needs the central resolver. |
+| PR-A16 (smart placement) | **Partially done.** `addLayer` places new objects in free space; the brief's photo-busyness version is complementary and still worth doing. |
 | PR-A1 (`src/data/hr.ts`) | **Not done.** `stravaZones.ts` overlaps it with a different model (`ZoneBand {min,max}` vs `Zones {boundaries[5], source}`) and has no `prefs.hrMax` path. Fold the parser into `hr.ts` rather than keeping two modules. |
 | §1.2 line numbers | Stale for `chartLayers.ts`, `fields.ts`, `App.jsx`. Re-derive before citing. |
 
-`scripts/verify-plan.mjs` (spec in the brief's Appendix A) **does not exist yet** and is what
-would have caught this. Build it early.
+`scripts/verify-plan.mjs` now exists — `npm run verify:plan [PR-XX]`. Two bugs in the brief's
+own Appendix A listing had to be fixed to make it run: it pointed at the v1 filename, and its
+path regex read prose identifiers like `session.athlete` as missing files.
+
+**First run: 56 briefs clean, 13 drifted.** Run it before every PR. Known real drift beyond
+the table above:
+
+- PR-A0's `src/render.js:61` claim ("`DEMO.hrMax = 178`") was never right — `hrMax` is inline
+  in the object literal, not a statement.
+- PR-C1 cites `src/ui/StravaModal.tsx`, which does not exist; that UI is inline in App.jsx.
+- PR-D8 and PR-D11 cite files that Phase B/D create later — expected, not a bug.
+
+Two design conflicts the briefs do not notice, both worth settling before A2:
+
+- **`boundaries[0]` means two different things.** PR-A1's fixture sets it to 95 (50 % of max);
+  PR-C1 maps Strava with `zones.map(z => z.min)`, where Z1's min is **0**. `zoneOf` ignores
+  index 0, so zone assignment is safe — but PR-A2 draws the Z1 *band* from `bounds[0]`, so the
+  chart's first band differs by source.
+- **PR-A2 draws "Set your max HR in Settings to see zones" onto the canvas.** That is inside
+  the design, so it would ship inside an exported Instagram story. It should draw nothing in
+  export mode, and the copy is wrong for anyone whose zones come from Strava.
+
+**The golden baseline has still never been recorded**, yet dozens of briefs use
+"`npm run test:golden` — zero diff" as acceptance criteria. That check is currently
+decorative. Recording it is the highest-value first action.
 
 ## Execution order
 
