@@ -18,7 +18,8 @@
     "golden:update": "node scripts/golden-update.mjs",
     "fixtures:media": "node scripts/make-fixture-photo.mjs",
     "size": "node scripts/size.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run size"
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run size",
+    "verify:plan": "node scripts/verify-plan.mjs"
   },
   "dependencies": {
     "esbuild": "^0.28.2",
