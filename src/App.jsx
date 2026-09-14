@@ -33,6 +33,7 @@ import { parseHeartRateZones, resolveAthleteHrMax, resolveZones, zoneOfBands } f
 import { buildCaption } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
 import { MyDesigns } from "./ui/MyDesigns.tsx";
+import { Settings } from "./ui/Settings.tsx";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer, newTextLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
@@ -143,6 +144,7 @@ export default function App() {
   // Stored preferences. `hrMax` here is the athlete's own maximum — the second honest
   // source of zones, for anyone who has not connected Strava. PR-A4.5 gives it a UI.
   const [prefs, setPrefs] = useState(loadPrefs);
+  const [showSettings, setShowSettings] = useState(false);
   const [lookId, setLookId] = useState(DEFAULT_LOOK_ID);
   const [matchedLook, setMatchedLook] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -806,6 +808,7 @@ export default function App() {
             <button type="button" className="btn" onClick={() => undo()} disabled={!canUndo} title="Undo" data-testid="undo">↶</button>
             <button type="button" className="btn" onClick={() => redo()} disabled={!canRedo} title="Redo" data-testid="redo">↷</button>
             <button type="button" className={`btn ${safeZones ? "on" : ""}`} onClick={toggleSafeZones} title="Instagram safe zones" data-testid="safe-zones">Safe zones</button>
+            <button type="button" className="btn" onClick={() => setShowSettings(true)} title="Settings" aria-label="Settings" data-testid="settings-button">⚙</button>
             <button
               type="button"
               className={`btn ${opts.animate ? "on" : ""}`}
@@ -946,6 +949,9 @@ export default function App() {
         </section>
       </div>
 
+      {showSettings && (
+        <Settings onClose={() => setShowSettings(false)} onChange={setPrefs} />
+      )}
       {showStrava && (
         <Modal onClose={() => setShowStrava(false)} title="Strava">
           {!strava.connected && (
