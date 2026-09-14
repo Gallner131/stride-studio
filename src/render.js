@@ -56,14 +56,12 @@ const demoSplits = (n, base) => Array.from({ length: n }, (_, i) => base + Math.
 const demoElev = () => Array.from({ length: 120 }, (_, i) => 20 + 30 * Math.sin(i / 9) + 18 * Math.sin(i / 3.3 + 2) + 10 * Math.sin(i / 1.4) + i * 0.15);
 const demoHr = () => Array.from({ length: 200 }, (_, i) => { const t = i / 199; return Math.round(105 + 55 * (1 - Math.exp(-t * 6)) + 8 * Math.sin(i / 7) + 4 * Math.sin(i / 2.3) + (t > 0.85 ? 12 : 0)); });
 
-// `hrMax` here is the peak this demo run reached, and it has been read as the athlete's
-// maximum everywhere downstream — which is the §7.4 bug. `activityHrMax` is the same number
-// under a name that cannot be mistaken for one. PR-A5 removes `hrMax` once the last caller
-// has moved across; until then both are present and equal, so nothing renders differently.
+// `activityHrMax` is the peak this demo run reached. It is a number to display, never a
+// zone ceiling — reading it as the athlete's maximum is what reported every run as Z4/Z5
+// (§7.4). The deprecated `hrMax` alias is gone as of PR-A5; nothing reads it any more.
 export const DEMO = {
   id: "demo", sport: "run", name: "Sunday long run", date: new Date().toISOString(),
   distance: 21100, time: 6135, elevation: 84, hr: 158,
-  hrMax: 178,          // DEPRECATED — use activityHrMax. Removed in A5.
   activityHrMax: 178,  // peak reached during this run
   calories: 1420,
   route: demoRoute(), splits: demoSplits(21, 291), elev: demoElev(), hrStream: demoHr(),
@@ -71,7 +69,6 @@ export const DEMO = {
 export const DEMO_WORKOUT = {
   id: "demo-workout", sport: "workout", name: "Strength + core", date: new Date().toISOString(),
   distance: 0, time: 2700, elevation: 0, hr: 132,
-  hrMax: 171,          // DEPRECATED — use activityHrMax. Removed in A5.
   activityHrMax: 171,
   calories: 410,
   route: [], splits: [], elev: [], hrStream: Array.from({ length: 200 }, (_, i) => Math.round(110 + 35 * Math.abs(Math.sin(i / 14)) + 8 * Math.sin(i / 3) + (i % 40 < 6 ? -20 : 0))),
@@ -386,7 +383,11 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
   const d = derive(act, opts, liveP);
   const dFull = derive(act, opts, 1);
   const M = 84;
-  const hrMax = act.hrMax || 190;
+  // Still the activity's own peak, and still wrong as a zone ceiling — see the note at the
+  // end of PR-A5. The legacy renderer cannot import the resolver (that breaks the golden
+  // harness), so the fix is to thread resolved zones through `opts`, which moves pixels and
+  // needs its own golden-update PR. Renamed here so the wrongness is at least legible.
+  const hrMax = act.activityHrMax || 190;
 
   ctx.save();
   ctx.translate(opts.offsetX || 0, opts.offsetY);
@@ -591,7 +592,7 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
       if (d.hasDist) lines.push([d.paceLabel.toUpperCase(), d.paceStr]);
       if (act.elevation && d.hasDist) lines.push(["ELEVATION", `${Math.round(d.elevV)} ${d.elevU}`]);
       if (act.hr) lines.push(["AVG HR", `${act.hr} bpm`]);
-      if (act.hrMax && act.hr) lines.push(["MAX HR", `${act.hrMax} bpm`]);
+      if (act.activityHrMax && act.hr) lines.push(["MAX HR", `${act.activityHrMax} bpm`]);
       if (act.calories) lines.push(["CALORIES", `${act.calories}`]);
       if (act.splits?.length) lines.push(["FASTEST KM", fmtPace(Math.min(...act.splits))]);
       const rh = Math.min(H - 120, 560 + lines.length * 56);

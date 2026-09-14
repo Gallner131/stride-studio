@@ -38,20 +38,10 @@ export const FIXTURE_ATHLETE = {
 };
 
 /** Demo run: 21.1 km, route, splits, elevation, HR stream. */
-export const FIXTURE_RUN = {
-  ...DEMO,
-  date: FIXED_DATE,
-  activityHrMax: DEMO.hrMax, // peak reached during this run
-  // `hrMax` is inherited from DEMO and left in place for A1-A4 to compile against. A5
-  // removes it, once nothing reads it as a zone ceiling any more.
-};
+export const FIXTURE_RUN = { ...DEMO, date: FIXED_DATE };
 
 /** Demo workout: no distance, no route, no splits, HR stream only. Spec §4.7. */
-export const FIXTURE_WORKOUT = {
-  ...DEMO_WORKOUT,
-  date: FIXED_DATE,
-  activityHrMax: DEMO_WORKOUT.hrMax,
-};
+export const FIXTURE_WORKOUT = { ...DEMO_WORKOUT, date: FIXED_DATE };
 
 export const FIXTURE_ACTIVITIES = {
   run: FIXTURE_RUN,

@@ -8,14 +8,17 @@ import { describe, expect, it } from "vitest";
 import { FIXTURE_ATHLETE, FIXTURE_RUN, FIXTURE_SESSION, FIXTURE_WORKOUT } from "../fixtures/activities.js";
 
 describe("fixtures", () => {
-  it("FIXTURE_RUN exposes activityHrMax equal to legacy hrMax", () => {
+  it("FIXTURE_RUN carries the peak this run reached", () => {
     expect(FIXTURE_RUN.activityHrMax).toBe(178);
-    expect(FIXTURE_RUN.hrMax).toBe(178); // legacy field still present pre-A5
   });
 
-  it("FIXTURE_WORKOUT exposes activityHrMax equal to legacy hrMax", () => {
+  it("FIXTURE_WORKOUT carries the peak that workout reached", () => {
     expect(FIXTURE_WORKOUT.activityHrMax).toBe(171);
-    expect(FIXTURE_WORKOUT.hrMax).toBe(171);
+  });
+
+  it("the deprecated hrMax alias is gone, so nothing can quietly read it again", () => {
+    expect("hrMax" in FIXTURE_RUN).toBe(false);
+    expect("hrMax" in FIXTURE_WORKOUT).toBe(false);
   });
 
   it("FIXTURE_ATHLETE carries five Strava-shaped bands", () => {

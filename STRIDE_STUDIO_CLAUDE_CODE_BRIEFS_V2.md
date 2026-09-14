@@ -1846,7 +1846,37 @@ v1 said "delete render.js zoneOf". But render.js:749 and :757 use `.c` and `.nam
 
 #### Change spec
 
-**1) `src/render.js:280-286` — replace with shim:**
+> ### ⚠️ Corrected 12 Sep 2026 — the shim below CANNOT import, and must not try
+>
+> The shim the brief specifies begins `import { ... } from "./data/hr.js"`. That breaks the
+> entire golden suite, and I verified it rather than assuming: adding a single import line to
+> `src/render.js` makes all 354 cells fail with `page.waitForSelector: Test timeout`.
+>
+> The reason is that `test/golden/harness.html` loads `../../src/render.js` as a raw ES module
+> in the browser, with no bundler in the path. `scripts/serve.mjs` serves static files and does
+> not even have a MIME type for `.ts`, and `src/data/hr.js` does not exist — only `hr.ts`. The
+> module fails to resolve, the harness never sets `data-ready`, and every cell times out.
+>
+> **`src/render.js` having zero import statements is load-bearing, not an accident.** Anything
+> it needs must be inline until it stops being the golden harness's entry point.
+>
+> So `zoneOf` and `zoneShares` stay in `render.js`, self-contained. Fortunately they already
+> agree with `hr.ts` numerically: `ZONES` uses 0.5/0.6/0.7/0.8/0.9 as `hi` bounds and
+> `bandsFromMax` uses 0/0.6/0.7/0.8/0.9 as floors, which select the same zone for every input.
+> They are deleted in Phase B along with `case "hrwave"` and `case "zones"`, which are their
+> only two callers.
+>
+> **What this brief still does:** rename the activity's peak to `activityHrMax` everywhere it
+> is still called `hrMax` — `render.js`, `gpx.ts`, and the two demo objects — and drop the
+> `+ 5` that `gpx.ts:389` still adds.
+>
+> **What it deliberately does not do, flagged for a decision:** the legacy renderer's
+> `case "hrwave"` and `case "zones"` still derive their zones from the activity's peak, so the
+> §7.4 bug is still live in the **Style** tab even after this PR. Fixing it means threading the
+> resolved zones through `opts` (App.jsx already has them), which changes those templates'
+> pixels and needs its own `golden-update` PR. See the note at the end of this brief.
+
+**1) `src/render.js:290-296` — SUPERSEDED, do not implement:**
 
 ```js
 // BEFORE
