@@ -1,13 +1,25 @@
 import { describe, expect, it } from "vitest";
 // Legacy JS modules: types are inferred, not declared, until src/ becomes TypeScript in
 // Phases 1-2 (tsconfig has allowJs, checkJs: false).
-import { captionFor, DEFAULT_OPTS, decodePolyline, derive, zoneOf, zoneShares } from "../../src/render.js";
-import { FIXTURE_RUN, FIXTURE_WORKOUT } from "../fixtures/activities.js";
+import {
+  captionFor,
+  DEFAULT_OPTS,
+  decodePolyline,
+  derive,
+  zoneOfBands,
+  zoneSharesFromBands,
+} from "../../src/render.js";
+import { FIXTURE_ATHLETE, FIXTURE_RUN, FIXTURE_WORKOUT } from "../fixtures/activities.js";
 
-// `zoneOf` is inferred as possibly-undefined because it ends in `ZONES.find(...) || ZONES[4]`
-// and noUncheckedIndexedAccess treats the fallback index as unsafe. It never actually returns
-// undefined (ZONES has five entries), so narrow it once here rather than at every call.
-const zone = zoneOf as (bpm: number, max: number) => { n: number; name: string; c: string };
+// The legacy zone helpers take the athlete's bands now, not a maximum to divide by — the
+// §7.4 fix reaching the switch-case renderer behind the Style tab. Types are inferred from
+// plain JS, so narrow them once here rather than at every call.
+const zone = zoneOfBands as (bpm: number, bands: { min: number; max: number }[]) => number | null;
+const shares = zoneSharesFromBands as (
+  stream: number[] | undefined,
+  bands: { min: number; max: number }[],
+) => number[] | null;
+const bands = FIXTURE_ATHLETE.hrZones;
 
 /** Spec §12.1: derive() across sports and units, polyline decoding, HR zones. */
 
@@ -119,27 +131,37 @@ describe("decodePolyline", () => {
 });
 
 describe("HR zones", () => {
-  it("maps bpm to a zone against max HR", () => {
-    expect(zone(90, 180).n).toBe(1); // 50%
-    expect(zone(115, 180).n).toBe(2); // 64%
-    expect(zone(135, 180).n).toBe(3); // 75%
-    expect(zone(155, 180).n).toBe(4); // 86%
-    expect(zone(175, 180).n).toBe(5); // 97%
+  // These used to read `zone(90, 180)` — a reading and a maximum to divide by. That was the
+  // shape of the §7.4 bug: the 180 came from the peak of the run being drawn, so the same
+  // 90 bpm landed in a different zone depending on how hard the rest of the run was. Now
+  // the athlete's own bands decide, and the same reading always means the same thing.
+  it("maps bpm to a zone against the athlete's bands", () => {
+    expect(zone(90, bands)).toBe(0); // below 114, Z1
+    expect(zone(120, bands)).toBe(1); // 114-133, Z2
+    expect(zone(140, bands)).toBe(2); // 133-152, Z3
+    expect(zone(160, bands)).toBe(3); // 152-171, Z4
+    expect(zone(175, bands)).toBe(4); // 171+, Z5
   });
 
-  it("puts anything at or above the top boundary in zone 5", () => {
-    expect(zone(200, 180).n).toBe(5);
+  it("puts anything above the top band in zone 5, which has no ceiling", () => {
+    expect(zone(200, bands)).toBe(4);
+    expect(zone(300, bands)).toBe(4);
+  });
+
+  it("has no answer without bands, rather than a wrong one", () => {
+    expect(zone(140, [])).toBeNull();
+    expect(shares([120, 140], [])).toBeNull();
   });
 
   it("returns shares that sum to 1", () => {
-    const shares = zoneShares(FIXTURE_RUN.hrStream, FIXTURE_RUN.activityHrMax);
-    expect(shares).toHaveLength(5);
-    expect(shares.reduce((a: number, b: number) => a + b, 0)).toBeCloseTo(1, 10);
+    const s = shares(FIXTURE_RUN.hrStream, bands);
+    expect(s).toHaveLength(5);
+    expect(s?.reduce((a: number, b: number) => a + b, 0)).toBeCloseTo(1, 10);
   });
 
-  it("returns all zeroes for an empty stream", () => {
-    expect(zoneShares([], 180)).toEqual([0, 0, 0, 0, 0]);
-    expect(zoneShares(undefined, 180)).toEqual([0, 0, 0, 0, 0]);
+  it("returns null for an empty or missing stream", () => {
+    expect(shares([], bands)).toBeNull();
+    expect(shares(undefined, bands)).toBeNull();
   });
 
   // NOTE (spec §12.1 asks for time-weighted zone shares; §1.2 E7 flags the same area).
@@ -148,7 +170,7 @@ describe("HR zones", () => {
   // needs streams.time, which arrives with the data layer in Phase 5.
   it("documents that shares are sample-weighted, not time-weighted", () => {
     // Two samples in zone 1, one in zone 5 -> 2/3 and 1/3 regardless of their duration.
-    expect(zoneShares([90, 90, 175], 180)).toEqual([2 / 3, 0, 0, 0, 1 / 3]);
+    expect(shares([90, 90, 175], bands)).toEqual([2 / 3, 0, 0, 0, 1 / 3]);
   });
 });
 

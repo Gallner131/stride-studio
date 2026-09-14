@@ -23,7 +23,7 @@
         setFormat,
         TEMPLATES,
       } from "../../src/render.js";
-      import { FIXED_DATE, FIXTURE_ACTIVITIES } from "../fixtures/activities.js";
+      import { FIXED_DATE, FIXTURE_ACTIVITIES, FIXTURE_ATHLETE } from "../fixtures/activities.js";
 
       /**
        * Composition cells keep the spec's 540 px (§12.2) so a one-pixel text shift still
@@ -121,7 +121,15 @@
         const ctx = canvas.getContext("2d", { alpha: true });
         ctx.scale(scale, scale);
 
-        const opts = { ...structuredClone(DEFAULT_OPTS), ...LOOKS[look] };
+        // The athlete's own zones, exactly as App.jsx hands them to the renderer. Without
+        // them the zone templates would draw their "connect Strava" line and the fence would
+        // stop measuring the thing it exists to measure (§7.4).
+        const opts = {
+          ...structuredClone(DEFAULT_OPTS),
+          ...LOOKS[look],
+          zones: FIXTURE_ATHLETE.hrZones,
+          athleteHrMax: FIXTURE_ATHLETE.hrMax,
+        };
         const act = FIXTURE_ACTIVITIES[activity];
         const mode = tier === "sticker" ? "sticker" : "full";
         renderFrame(ctx, tier === "photo" ? media : null, act, template, opts, 1, 1, mode);

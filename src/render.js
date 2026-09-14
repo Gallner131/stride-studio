@@ -284,11 +284,34 @@ export const ZONES = [
   { n: 3, name: "Aerobic", lo: 0.7, hi: 0.8, c: "#7BE495" }, { n: 4, name: "Threshold", lo: 0.8, hi: 0.9, c: "#FFB347" },
   { n: 5, name: "Max", lo: 0.9, hi: 2, c: "#FF5A5F" },
 ];
-export function zoneOf(bpm, max) { const f = bpm / (max || 190); return ZONES.find((z) => f < z.hi) || ZONES[4]; }
-export function zoneShares(stream, max) {
-  const counts = [0, 0, 0, 0, 0];
-  if (!stream || !stream.length) return counts;
-  stream.forEach((b) => { counts[zoneOf(b, max).n - 1]++; });
+// Band lookup, duplicated from src/data/hr.ts on purpose.
+//
+// This file cannot import it. test/golden/harness.html loads src/render.js as a raw ES
+// module with no bundler in the path, scripts/serve.mjs has no MIME type for .ts, and
+// src/data/hr.js does not exist — one import line here makes all 354 golden cells time out
+// waiting for a harness that never becomes ready. So the two implementations are kept in
+// step by test/unit/legacyZones.test.ts, which runs both over the same inputs and requires
+// identical answers.
+//
+// What was here before took a single `max` and divided by it: `zoneOf(bpm, max)` with
+// `max = act.hrMax || 190`, the peak reached during the run being drawn. That is the §7.4
+// bug — an easy run peaking at 170 made 175 the assumed ceiling, so 140 bpm came out at
+// 80 % and was reported as Z4. Zones are the athlete's, or there are none.
+
+/** Which band a reading falls in, 0-indexed. Null when there are no bands to judge against. */
+export function zoneOfBands(bpm, bands) {
+  if (!bands || !bands.length) return null;
+  for (let i = bands.length - 1; i >= 0; i--) {
+    if (bpm >= bands[i].min) return i;
+  }
+  return 0;
+}
+
+/** Time spent in each band as a share of the stream. Null when there are no bands. */
+export function zoneSharesFromBands(stream, bands) {
+  if (!bands || !bands.length || !stream || !stream.length) return null;
+  const counts = new Array(bands.length).fill(0);
+  stream.forEach((bpm) => { const z = zoneOfBands(bpm, bands); if (z !== null) counts[z]++; });
   return counts.map((c) => c / stream.length);
 }
 
@@ -383,11 +406,13 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
   const d = derive(act, opts, liveP);
   const dFull = derive(act, opts, 1);
   const M = 84;
-  // Still the activity's own peak, and still wrong as a zone ceiling — see the note at the
-  // end of PR-A5. The legacy renderer cannot import the resolver (that breaks the golden
-  // harness), so the fix is to thread resolved zones through `opts`, which moves pixels and
-  // needs its own golden-update PR. Renamed here so the wrongness is at least legible.
-  const hrMax = act.activityHrMax || 190;
+  // The athlete's own heart-rate zones, resolved by src/data/hr.ts and handed in through
+  // `opts` — this file cannot import the resolver, so the caller passes the answer. Absent
+  // means we do not know them, and nothing zone-shaped is drawn rather than guessed (§7.4).
+  const bands = opts.zones || null;
+  // The athlete's true maximum, for the one ring that needs a denominator. No band carries
+  // one, because the top zone is open-ended. Null means the ring stays empty.
+  const athleteHrMax = opts.athleteHrMax || null;
 
   ctx.save();
   ctx.translate(opts.offsetX || 0, opts.offsetY);
@@ -745,8 +770,9 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
       if (hs.length > 1) {
         const min = Math.min(...hs) - 5, max = Math.max(...hs) + 5;
         shadow(ctx, false);
-        ZONES.forEach((z) => {
-          const lo = Math.max(min, z.lo * hrMax), hi = Math.min(max, z.hi * hrMax);
+        (bands || []).forEach((band, bi) => {
+          const z = ZONES[bi] || ZONES[4];
+          const lo = Math.max(min, band.min), hi = Math.min(max, band.max);
           if (hi <= lo) return;
           const y1 = box.y + box.h - ((hi - min) / (max - min)) * box.h, y2 = box.y + box.h - ((lo - min) / (max - min)) * box.h;
           ctx.fillStyle = hexAlpha(z.c, 0.16); ctx.fillRect(box.x, y1, box.w, y2 - y1);
@@ -757,7 +783,8 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
         for (let i = 1; i < n; i++) {
           const x0 = box.x + ((i - 1) / (hs.length - 1)) * box.w, x1 = box.x + (i / (hs.length - 1)) * box.w;
           const y0 = box.y + box.h - ((hs[i - 1] - min) / (max - min)) * box.h, y1 = box.y + box.h - ((hs[i] - min) / (max - min)) * box.h;
-          ctx.strokeStyle = zoneOf(hs[i], hrMax).c; ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 10;
+          const zi = zoneOfBands(hs[i], bands);
+          ctx.strokeStyle = zi === null ? acc : ZONES[zi].c; ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 10;
           ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
         }
         ctx.restore();
@@ -765,16 +792,20 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
         shadow(ctx, light);
         ctx.textAlign = "left"; ctx.fillStyle = txt; ctx.font = `800 ${F(150)} ${SANS}`; ctx.fillText(`${shown}`, M, H - 190);
         const w1 = ctx.measureText(`${shown}`).width;
-        ctx.fillStyle = zoneOf(shown, hrMax).c; ctx.font = `700 ${F(48)} ${SANS}`; ctx.fillText(`bpm avg   ${zoneOf(shown, hrMax).name.toLowerCase()}`, M + w1 + 18, H - 190);
+        const zShown = zoneOfBands(shown, bands);
+        // Without the athlete's zones there is no zone to name, so the line says "bpm avg"
+        // and stops, rather than naming a zone worked out from this run's own peak.
+        ctx.fillStyle = zShown === null ? sub : ZONES[zShown].c; ctx.font = `700 ${F(48)} ${SANS}`;
+        ctx.fillText(zShown === null ? "bpm avg" : `bpm avg   ${ZONES[zShown].name.toLowerCase()}`, M + w1 + 18, H - 190);
         ctx.fillStyle = sub; ctx.font = `600 ${F(40)} ${SANS}`; ctx.fillText(`peak ${Math.max(...hs)} bpm   ${fmtTime(act.time)}${d.hasDist ? `   ${fmtDist(dFull.dist)} ${d.unit}` : ""}`, M, H - 120);
       } else { ctx.textAlign = "left"; ctx.fillStyle = sub; ctx.font = `500 ${F(36)} ${SANS}`; ctx.fillText("No heart rate data for this activity", M, H - 190); }
       ctx.textAlign = "right"; ctx.fillStyle = sub; ctx.font = `500 ${F(40)} ${SANS}`; ctx.fillText(d.meta, W - M, H - 820);
       break;
     }
     case "zones": {
-      const shares = zoneShares(act.hrStream, hrMax);
+      const shares = zoneSharesFromBands(act.hrStream, bands);
       const x0 = M, barW = W - 2 * M, y0 = H / 2 - 140;
-      if (act.hrStream?.length) {
+      if (act.hrStream?.length && shares) {
         shadow(ctx, false);
         let x = x0;
         ZONES.forEach((z, i) => { const w = barW * shares[i] * anim; if (w > 6) { ctx.fillStyle = z.c; roundRect(ctx, x, y0, Math.max(0, w - 4), 70, 8); ctx.fill(); } x += barW * shares[i]; });
@@ -789,8 +820,15 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
         });
         shadow(ctx, light);
         ctx.textAlign = "left"; ctx.fillStyle = txt; ctx.font = `800 ${F(110)} ${SANS}`; ctx.fillText(`${act.hr || Math.round(act.hrStream.reduce((a, b) => a + b, 0) / act.hrStream.length)} bpm`, M, y0 - 90);
-        ctx.fillStyle = sub; ctx.font = `600 ${F(40)} ${SANS}`; ctx.fillText(`average   ${fmtTime(act.time)} in the zones   max ${hrMax}`, M, y0 - 30);
-      } else { shadow(ctx, light); ctx.textAlign = "left"; ctx.fillStyle = sub; ctx.font = `500 ${F(36)} ${SANS}`; ctx.fillText("No heart rate data for this activity", M, y0); }
+        ctx.fillStyle = sub; ctx.font = `600 ${F(40)} ${SANS}`;
+        ctx.fillText(`average   ${fmtTime(act.time)} in the zones${athleteHrMax ? `   max ${athleteHrMax}` : ""}`, M, y0 - 30);
+      } else {
+        // Two different absences, said apart. The old copy blamed the heart-rate stream in
+        // both cases, which sent people looking for a problem with their watch when what was
+        // missing was their zones.
+        shadow(ctx, light); ctx.textAlign = "left"; ctx.fillStyle = sub; ctx.font = `500 ${F(36)} ${SANS}`;
+        ctx.fillText(act.hrStream?.length ? "Connect Strava or set your max heart rate to see zones" : "No heart rate data for this activity", M, y0);
+      }
       ctx.textAlign = "left"; ctx.fillStyle = sub; ctx.font = `500 ${F(40)} ${SANS}`; ctx.fillText(d.meta, M, H - 150);
       break;
     }
@@ -798,7 +836,11 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
       const k = Math.min(1, H / 1920), cx = W / 2, cy = H / 2 - 40 * k, radii = [300 * k, 230 * k, 160 * k];
       const vals = [
         { v: Math.min(1, act.time / 3600), c: acc === "#FFFFFF" ? "#FF2D95" : acc, label: fmtTime(act.time), name: "time" },
-        { v: act.hr ? Math.min(1, act.hr / hrMax) : 0.5, c: "#7BE495", label: act.hr ? `${act.hr} bpm` : "no HR", name: "effort" },
+        // The effort ring is a fraction of the athlete's capacity, so it needs their maximum.
+        // It used to divide by this run's peak, which filled the ring about equally for a
+        // recovery jog and a time trial. With no maximum the number still shows and the ring
+        // stays empty, which is the honest reading (§7.4).
+        { v: act.hr && athleteHrMax ? Math.min(1, act.hr / athleteHrMax) : 0, c: "#7BE495", label: act.hr ? `${act.hr} bpm` : "no HR", name: "effort" },
         { v: d.hasDist ? Math.min(1, dFull.dist / (opts.units === "mi" ? 13.1 : 21.1)) : Math.min(1, (act.calories || 300) / 800), c: "#4FC1E9", label: d.hasDist ? `${fmtDist(dFull.dist)} ${d.unit}` : `${act.calories || ""} kcal`, name: d.hasDist ? "distance" : "burn" },
       ];
       shadow(ctx, false);

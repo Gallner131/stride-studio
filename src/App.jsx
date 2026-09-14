@@ -172,6 +172,15 @@ export default function App() {
   // The rings need a denominator and no band carries one, so it is resolved separately.
   const athleteHrMax = useMemo(() => resolveAthleteHrMax(prefs, athlete), [prefs, athlete]);
 
+  // The legacy switch-case renderer cannot import the resolver — doing so breaks the golden
+  // harness, which loads src/render.js as a raw ES module — so it is handed the answer
+  // instead. Kept out of `opts` state on purpose: opts is saved into documents, and the
+  // athlete's zones are session data that must not be frozen into a design (§7.4).
+  const renderOpts = useMemo(
+    () => ({ ...opts, zones: zones?.bands ?? null, athleteHrMax }),
+    [opts, zones, athleteHrMax],
+  );
+
   const fields = useMemo(() => {
     const base = buildFields(effectiveAct, opts, zones?.bands ?? null);
     return hyrox ? { ...base, ...hyroxFields(hyrox) } : base;
@@ -336,7 +345,7 @@ export default function App() {
       const k = 216 / FORMATS[format].w;
       const cx = c.getContext("2d");
       cx.scale(k, k);
-      try { renderFrame(cx, media, act, template, { ...opts, animate: false }, 1, 1); } catch {}
+      try { renderFrame(cx, media, act, template, { ...renderOpts, animate: false }, 1, 1); } catch {}
       cx.save(); cx.scale(W / 1000, W / 1000);
       try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver, hyrox, series, look }); } catch {}
       cx.restore();
@@ -410,7 +419,7 @@ export default function App() {
     if (media?.type === "video" && media.el.duration) progress = media.el.currentTime / media.el.duration;
     const ctx = c.getContext("2d");
     const lm = legacyMode(stateRef.current.doc, "full");
-    if (lm) renderFrame(ctx, media, act, template, opts, progress, opts.animate ? animT() : 1, lm);
+    if (lm) renderFrame(ctx, media, act, template, renderOpts, progress, opts.animate ? animT() : 1, lm);
     else ctx.clearRect(0, 0, W, H);
 
     // Document layers, drawn on top in canvas units (1000 wide, §4.1).
@@ -648,7 +657,7 @@ export default function App() {
   const drawFull = (ctx, mode, t = Number.POSITIVE_INFINITY) => {
     const animT2 = t === Number.POSITIVE_INFINITY ? 1 : Math.min(1, t / ANIM_SECONDS);
     const lm = legacyMode(doc, mode);
-    if (lm) renderFrame(ctx, media, effectiveAct, template, opts, 1, animT2, lm);
+    if (lm) renderFrame(ctx, media, effectiveAct, template, renderOpts, 1, animT2, lm);
     else ctx.clearRect(0, 0, W, H);
     if (doc.layers.length) {
       ctx.save();
@@ -716,9 +725,9 @@ export default function App() {
           if (clip) {
             // Frame-accurate: seek the clip rather than playing it (§9.3).
             try { clip.currentTime = Math.min(clip.duration, t); } catch {}
-            renderFrame(ctx, media, effectiveAct, template, opts, clip.duration ? t / clip.duration : 0, Math.min(1, t / ANIM_SECONDS), "full");
+            renderFrame(ctx, media, effectiveAct, template, renderOpts, clip.duration ? t / clip.duration : 0, Math.min(1, t / ANIM_SECONDS), "full");
           } else {
-            renderFrame(ctx, media, effectiveAct, template, { ...opts, animate: true }, 1, Math.min(1, t / ANIM_SECONDS), "full");
+            renderFrame(ctx, media, effectiveAct, template, { ...renderOpts, animate: true }, 1, Math.min(1, t / ANIM_SECONDS), "full");
           }
           if (doc.layers.length) {
             ctx.scale(W / 1000, W / 1000);
