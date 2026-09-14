@@ -132,7 +132,7 @@ describe("HR zones", () => {
   });
 
   it("returns shares that sum to 1", () => {
-    const shares = zoneShares(FIXTURE_RUN.hrStream, FIXTURE_RUN.hrMax);
+    const shares = zoneShares(FIXTURE_RUN.hrStream, FIXTURE_RUN.activityHrMax);
     expect(shares).toHaveLength(5);
     expect(shares.reduce((a: number, b: number) => a + b, 0)).toBeCloseTo(1, 10);
   });

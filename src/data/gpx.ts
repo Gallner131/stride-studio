@@ -21,7 +21,8 @@ export interface ImportedActivity {
   /** Metres of ascent. */
   elevation: number;
   hr: number | null;
-  hrMax: number | null;
+  /** Peak reached during this activity. NOT the athlete's maximum (§7.4). */
+  activityHrMax: number | null;
   calories: number | null;
   /** Decoded route as lat/lng pairs. */
   route: [number, number][];
@@ -333,7 +334,7 @@ function finish(
     elapsed,
     elevation: ascent(altitudes),
     hr: hrValues.length > 0 ? Math.round(hrValues.reduce((a, b) => a + b, 0) / hrValues.length) : null,
-    hrMax: hrValues.length > 0 ? Math.max(...hrValues) : null,
+    activityHrMax: hrValues.length > 0 ? Math.max(...hrValues) : null,
     calories: meta.calories,
     route: thinRoute(route),
     splits: kmSplits(points, cumulative),
@@ -386,7 +387,11 @@ export function importedToActivity(imported: ImportedActivity): Record<string, u
     time: imported.time,
     elevation: imported.elevation,
     hr: imported.hr,
-    hrMax: imported.hrMax ? imported.hrMax + 5 : null,
+    // Reported exactly as recorded. This used to get 5 bpm of headroom "so zone maths does
+    // not peg the top zone" — which was an admission that a run's peak was being used as the
+    // athlete's ceiling. Padding it made the zones less wrong without making them right.
+    // Zones come from the athlete now (§7.4), so this figure is only ever displayed.
+    activityHrMax: imported.activityHrMax,
     calories: imported.calories,
     route: imported.route,
     splits: imported.splits,

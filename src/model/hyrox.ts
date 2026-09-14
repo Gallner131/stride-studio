@@ -428,7 +428,7 @@ export function hyroxToActivity(result: HyroxResult): Record<string, unknown> {
     time: d.totalSeconds,
     elevation: 0,
     hr: null,
-    hrMax: null,
+    activityHrMax: null,
     calories: null,
     route: [],
     splits: result.runs.map((r) => r.seconds),

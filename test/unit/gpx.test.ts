@@ -85,7 +85,7 @@ describe("parseGpx", () => {
   it("reads heart rate out of the Garmin extension namespace", () => {
     const a = parsed();
     expect(a?.hr).toBeGreaterThan(100);
-    expect(a?.hrMax).toBeGreaterThan(a?.hr ?? 0);
+    expect(a?.activityHrMax).toBeGreaterThan(a?.hr ?? 0);
     expect(a?.hrStream.length).toBeGreaterThan(50);
   });
 
@@ -179,7 +179,13 @@ describe("importedToActivity", () => {
     expect(act.name).toBe("Thursday tempo");
     expect(act.route).toBe(imported.route);
     expect(act.splits).toBe(imported.splits);
-    // Max HR gets 5 bpm of headroom, so zone maths does not peg the top zone.
-    expect(act.hrMax).toBe((imported.hrMax ?? 0) + 5);
+    // The peak reached on this run, reported exactly as recorded.
+    //
+    // It used to get 5 bpm of headroom "so zone maths does not peg the top zone" — an
+    // admission that the wrong number was being used as a zone ceiling. Padding it made the
+    // zones less wrong without making them right. Zones now come from the athlete (§7.4) and
+    // this figure is only ever displayed, so inventing 5 bpm would just be a false reading.
+    expect(act.activityHrMax).toBeGreaterThan(100);
+    expect(act.activityHrMax).toBe(imported.activityHrMax);
   });
 });
