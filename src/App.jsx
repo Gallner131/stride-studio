@@ -29,7 +29,7 @@ import {
 import { canUseWebCodecs, exportVideo, MAX_CLIP_SECONDS } from "./export/video.ts";
 import { unregisterServiceWorker } from "./pwa/register.ts";
 import * as Strava from "./data/strava.ts";
-import { parseHeartRateZones } from "./data/hr.ts";
+import { parseHeartRateZones, resolveAthleteHrMax, resolveZones, zoneOfBands } from "./data/hr.ts";
 import { buildCaption } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
 import { MyDesigns } from "./ui/MyDesigns.tsx";
@@ -78,7 +78,10 @@ function ManualForm({ act, onChange }) {
         </div>
       </Field></div>
       <Field label="Avg heart rate"><input type="number" placeholder="optional" defaultValue={act.hr || ""} onChange={(e) => upd({ hr: parseInt(e.target.value, 10) || null })} /></Field>
-      <Field label="Max heart rate (for zones)"><input type="number" placeholder="e.g. 185" defaultValue={act.hrMax || ""} onChange={(e) => upd({ hrMax: parseInt(e.target.value, 10) || null })} /></Field>
+      {/* This is the peak reached on THIS run, not the athlete's maximum. The old label
+          said "for zones", which is what it was wrongly used for (§7.4); zones now come from
+          Strava or from Settings, never from here. */}
+      <Field label="Max heart rate on this run"><input type="number" placeholder="optional" defaultValue={act.activityHrMax || ""} onChange={(e) => upd({ activityHrMax: parseInt(e.target.value, 10) || null })} /></Field>
       <Field label="Calories"><input type="number" placeholder="optional" defaultValue={act.calories || ""} onChange={(e) => upd({ calories: parseInt(e.target.value, 10) || null })} /></Field>
     </div>
   );
@@ -137,6 +140,9 @@ export default function App() {
   // The athlete's real heart-rate zones, from Strava. Null means we do not know them, and
   // nothing zone-related is drawn rather than guessed (§7.4).
   const [zoneBands, setZoneBands] = useState(null);
+  // Stored preferences. `hrMax` here is the athlete's own maximum — the second honest
+  // source of zones, for anyone who has not connected Strava. PR-A4.5 gives it a UI.
+  const [prefs, setPrefs] = useState(loadPrefs);
   const [lookId, setLookId] = useState(DEFAULT_LOOK_ID);
   const [matchedLook, setMatchedLook] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -155,31 +161,45 @@ export default function App() {
   // A HYROX result drives both the legacy activity (so existing templates work) and the
   // extra {hyroxTotal}, {roxzone}, {station.*} bindings.
   const effectiveAct = useMemo(() => (hyrox ? { ...act, ...hyroxToActivity(hyrox) } : act), [act, hyrox]);
+
+  // One place decides which zones we have, and it is never told about the activity. Strava's
+  // own zones win; a maximum typed into Settings is the fallback; otherwise undefined, and
+  // everything zone-shaped draws nothing rather than something invented (§7.4).
+  const athlete = useMemo(() => (zoneBands ? { hrZones: zoneBands } : null), [zoneBands]);
+  const zones = useMemo(() => resolveZones(prefs, athlete), [prefs, athlete]);
+  // The rings need a denominator and no band carries one, so it is resolved separately.
+  const athleteHrMax = useMemo(() => resolveAthleteHrMax(prefs, athlete), [prefs, athlete]);
+
   const fields = useMemo(() => {
-    const base = buildFields(effectiveAct, opts, zoneBands);
+    const base = buildFields(effectiveAct, opts, zones?.bands ?? null);
     return hyrox ? { ...base, ...hyroxFields(hyrox) } : base;
-  }, [effectiveAct, opts, hyrox, zoneBands]);
+  }, [effectiveAct, opts, hyrox, zones]);
   const series = useMemo(() => {
     const a = effectiveAct;
     const km = (a.distance || 0) / 1000;
     // Relative effort, when Strava has not supplied one: minutes-in-zone weighted (§7.4).
+    //
+    // This was the last place a zone was worked out from a heart rate the app had no
+    // business dividing by — `a.hrMax || 190`, the peak of this very run — with its own
+    // private copy of the 60/70/80/90 thresholds. It now asks the same bands as everything
+    // else, and when there are no bands there is no effort score, because an effort number
+    // derived from a made-up maximum is exactly the kind of confident wrong answer this
+    // whole change is removing.
     let effort;
-    if (a.hrStream?.length) {
-      const max = a.hrMax || 190;
+    if (a.hrStream?.length && zones) {
       const weights = [1, 2, 3, 5, 8];
       const perSample = (a.time || 0) / a.hrStream.length / 60;
       const score = a.hrStream.reduce((acc, bpm) => {
-        const f = bpm / max;
-        const z = f < 0.6 ? 0 : f < 0.7 ? 1 : f < 0.8 ? 2 : f < 0.9 ? 3 : 4;
-        return acc + perSample * weights[z];
+        const z = zoneOfBands(bpm, zones.bands);
+        return z === null ? acc : acc + perSample * weights[z];
       }, 0);
       effort = Math.max(0, Math.min(100, Math.round((score / (60 * 5)) * 100)));
     }
     return {
       route: a.route || [],
       hr: a.hrStream || [],
-      hrMax: a.hrMax || undefined,
-      zones: zoneBands ?? undefined,
+      zones: zones?.bands,
+      athleteHrMax: athleteHrMax ?? undefined,
       splits: a.splits || [],
       altitude: a.elev || [],
       distanceKm: km,
@@ -188,7 +208,7 @@ export default function App() {
       effort,
       calories: a.calories || undefined,
     };
-  }, [effectiveAct, zoneBands]);
+  }, [effectiveAct, zones, athleteHrMax]);
 
   const caps = useMemo(
     () => ({
@@ -523,7 +543,7 @@ export default function App() {
       // The peak reached during THIS run, for display. It used to have 5 added and be used
       // as the zone ceiling, which reported every run as Z4/Z5 (§7.4). Zones now come from
       // the athlete's own Strava zones; see zoneBands below.
-      hrMax: a.max_heartrate ? Math.round(a.max_heartrate) : null,
+      activityHrMax: a.max_heartrate ? Math.round(a.max_heartrate) : null,
       calories: dd.calories ? Math.round(dd.calories) : null,
       route: decodePolyline(dd.map?.polyline || a.map?.summary_polyline),
       splits: splits.length ? splits : null,
