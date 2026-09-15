@@ -459,8 +459,21 @@ export default function App() {
     if (media?.type === "video" && media.el.duration) progress = media.el.currentTime / media.el.duration;
     const ctx = c.getContext("2d");
     const lm = legacyMode(stateRef.current.doc, "full");
-    if (lm) renderFrame(ctx, media, act, template, renderOpts, progress, opts.animate ? animT() : 1, lm);
-    else ctx.clearRect(0, 0, W, H);
+    // When a Design owns the canvas and there is no photo behind it, the LOOK is the page.
+    //
+    // Without this the legacy renderer painted its own dark gradient underneath and the
+    // design's colours came from the look's tokens, so any light look — paper, journal,
+    // clinic — drew dark text on a dark ground and read as broken. "A look restyles every
+    // element at once" has to include the surface those elements sit on.
+    const ownsCanvas = designOwnsCanvas(stateRef.current.doc);
+    if (ownsCanvas && !media) {
+      ctx.fillStyle = stateRef.current.look?.colors?.bg ?? "#111111";
+      ctx.fillRect(0, 0, W, H);
+    } else if (lm) {
+      renderFrame(ctx, media, act, template, renderOpts, progress, opts.animate ? animT() : 1, lm);
+    } else {
+      ctx.clearRect(0, 0, W, H);
+    }
 
     // Document layers, drawn on top in canvas units (1000 wide, §4.1).
     const st = stateRef.current;
