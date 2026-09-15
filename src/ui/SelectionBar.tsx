@@ -3,6 +3,7 @@ import { useEditor } from "../editor/store";
 import { hasPrimaryColor, primaryColor, setPrimaryColor } from "../model/colors";
 import { CANVAS_W, canvasHeight } from "../model/defaults";
 import type { FormatId, Layer, Placed } from "../model/types";
+import { PalettePicker } from "./PalettePicker";
 
 /**
  * The toolbar that appears on the thing you have selected — §6.5.
@@ -16,19 +17,6 @@ import type { FormatId, Layer, Placed } from "../model/types";
  * Deliberately short: colour, duplicate, delete, and a way through to everything else. A
  * toolbar with fifteen buttons is another menu.
  */
-
-/** Swatches offered first. Look tokens resolve against the active look (§5.4). */
-const SWATCHES: Array<{ value: string; label: string }> = [
-  { value: "$text", label: "Look text colour" },
-  { value: "$accent", label: "Look accent" },
-  { value: "#FFFFFF", label: "White" },
-  { value: "#111111", label: "Black" },
-  { value: "#FF5A5F", label: "Red" },
-  { value: "#3AA0FF", label: "Blue" },
-];
-
-/** Turns a stored colour into something an <input type="color"> can show. */
-const asHex = (value: string | null): string => (value && value.startsWith("#") ? value : "#FFFFFF");
 
 export interface SelectionBarProps {
   /** Placed boxes for the current selection, in canvas units. */
@@ -95,30 +83,11 @@ export function SelectionBar({ placed, format, onOpenInspector }: SelectionBarPr
 
           {openColor && (
             <div className="selbar-palette" data-testid="selbar-palette">
-              {SWATCHES.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  className="selbar-chip"
-                  aria-label={s.label}
-                  title={s.label}
-                  data-testid={`swatch-${s.value.replace(/[#$]/g, "")}`}
-                  style={s.value.startsWith("#") ? { background: s.value } : undefined}
-                  onClick={() => {
-                    applyColor(s.value);
-                    setOpenColor(false);
-                  }}
-                >
-                  {s.value.startsWith("$") ? s.value.slice(1, 2).toUpperCase() : ""}
-                </button>
-              ))}
-              <input
-                type="color"
-                className="selbar-native"
-                aria-label="Pick any colour"
-                data-testid="selbar-custom"
-                value={asHex(current)}
-                onChange={(e) => applyColor(e.target.value)}
+              <PalettePicker
+                value={current}
+                onChange={(v) => {
+                  applyColor(v);
+                }}
               />
             </div>
           )}

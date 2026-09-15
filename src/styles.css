@@ -433,3 +433,49 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
   .preview .btnrow .btn { padding: 9px 8px; font-size: 13px; }
   .controls { margin-top: 12px; }
 }
+
+/* ---------- Palette (§6.12) ----------
+   Sixty colours in a grid, not six chips in a row. Columns are hues, rows are intensities,
+   so "a dark green" is a place on the grid rather than something to hunt for. */
+.palette { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; }
+.palette-section { display: flex; flex-direction: column; gap: 5px; }
+.palette-label { font-size: 11px; color: var(--text-muted); letter-spacing: 0.04em; }
+.palette-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.palette-neutrals { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.palette-grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.palette-col { display: grid; grid-template-rows: repeat(5, 1fr); gap: 4px; }
+.palette-chip {
+  /* Sized by the grid, not fixed, so ten hues fit the width of a phone. */
+  width: 100%; aspect-ratio: 1; min-width: 0; border-radius: 6px; padding: 0; cursor: pointer;
+  border: 1px solid var(--border);
+}
+.palette-chip.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.palette-token {
+  padding: 4px 9px; border-radius: 999px; cursor: pointer; font-size: 11px;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+}
+.palette-token.on { border-color: var(--accent); color: var(--accent); }
+.palette-custom { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.palette-custom input { width: 42px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer; }
+/* The bar floats over the canvas, so its palette needs a surface of its own. */
+.selbar-palette {
+  position: absolute; top: calc(100% + 6px); left: 0; padding: 10px;
+  width: min(86vw, 320px);
+  border-radius: 12px; background: var(--surface); border: 1px solid var(--border);
+  box-shadow: var(--float-shadow); z-index: 8; max-height: 60vh; overflow: auto;
+}
+
+/* On a phone the selection bar floats mid-canvas, so a palette hung off it runs off the
+   screen. Below the desktop breakpoint it becomes a sheet across the bottom instead, which
+   is both reachable by thumb and impossible to clip. */
+@media (max-width: 899px) {
+  /* `position: fixed` does not escape .selbar — its backdrop-filter makes it the containing
+     block for fixed descendants — so the sheet is centred under the bar and clamped to the
+     viewport width instead. */
+  .selbar-palette {
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(88vw, 320px);
+    max-height: 52vh;
+  }
+}

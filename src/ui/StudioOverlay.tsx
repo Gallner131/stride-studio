@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import type { DragState, Rect } from "../editor/gestures";
 import { beginGesture, cycleAt, marqueeSelection, normaliseRect, updateGesture } from "../editor/gestures";
 import { drawOverlay } from "../editor/overlay";
@@ -120,7 +120,86 @@ export function StudioOverlay({ fields, asset, onOpenInspector }: StudioOverlayP
     });
   }, [doc, layout, selection, guides, safeZones, H, unitsPerPx, marquee]);
 
+  // Two fingers move and resize the design — §6.13.
+  //
+  // Dragging one element at a time is fine on a laptop and miserable on a phone, which is
+  // where this app is used. A pinch scales and repositions whatever is selected, or the whole
+  // design when nothing is, because "make it all a bit bigger and nudge it up" is the single
+  // most common thing anyone wants to do to a layout.
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<null | {
+    dist: number;
+    cx: number;
+    cy: number;
+    targets: Array<{ id: string; dx: number; dy: number; w?: number; h?: number; size?: number }>;
+  }>(null);
+
+  const pinchCentre = () => {
+    const pts = [...pointersRef.current.values()];
+    const a = pts[0];
+    const b = pts[1];
+    if (!a || !b) return null;
+    return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, dist: Math.hypot(a.x - b.x, a.y - b.y) };
+  };
+
+  const beginPinch = () => {
+    const c = pinchCentre();
+    if (!c || c.dist < 1) return;
+    const ids = selection.length > 0 ? selection : doc.layers.map((l) => l.id);
+    pinchRef.current = {
+      dist: c.dist,
+      cx: c.cx,
+      cy: c.cy,
+      targets: ids.flatMap((id) => {
+        const l = doc.layers.find((x) => x.id === id);
+        if (!l) return [];
+        return [
+          {
+            id,
+            dx: l.offset?.dx ?? 0,
+            dy: l.offset?.dy ?? 0,
+            w: typeof l.w === "number" ? l.w : undefined,
+            h: typeof l.h === "number" ? l.h : undefined,
+            size: l.type === "text" ? l.style?.size : undefined,
+          },
+        ];
+      }),
+    };
+  };
+
+  const updatePinch = () => {
+    const start = pinchRef.current;
+    const c = pinchCentre();
+    if (!start || !c) return;
+    // Clamped so a clumsy pinch cannot shrink the design to nothing or blow it off the page.
+    const scale = Math.max(0.3, Math.min(4, c.dist / start.dist));
+    const moveX = (c.cx - start.cx) * unitsPerPx();
+    const moveY = (c.cy - start.cy) * unitsPerPx();
+    for (const t of start.targets) {
+      patchLayer(t.id, (l) => {
+        l.offset.dx = Math.round(t.dx * scale + moveX);
+        l.offset.dy = Math.round(t.dy * scale + moveY);
+        if (t.size !== undefined && l.type === "text")
+          l.style.size = Math.max(10, Math.round(t.size * scale));
+        if (t.w !== undefined) l.w = Math.max(20, Math.round(t.w * scale));
+        if (t.h !== undefined) l.h = Math.max(20, Math.round(t.h * scale));
+      });
+    }
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointersRef.current.size === 2) {
+      // A second finger cancels whatever one finger had started; this is now a pinch.
+      dragRef.current = null;
+      marqueeRef.current = null;
+      setMarquee(null);
+      beginPinch();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (pointersRef.current.size > 2) return;
+
     const [x, y] = toCanvas(e.clientX, e.clientY);
     const upp = unitsPerPx();
     const result = beginGesture(doc, layout, selection, x, y, upp);
@@ -168,6 +247,14 @@ export function StudioOverlay({ fields, asset, onOpenInspector }: StudioOverlayP
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (pointersRef.current.has(e.pointerId)) {
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    if (pinchRef.current) {
+      updatePinch();
+      return;
+    }
+
     const m = marqueeRef.current;
     if (m) {
       const [mx, my] = toCanvas(e.clientX, e.clientY);
@@ -219,6 +306,13 @@ export function StudioOverlay({ fields, asset, onOpenInspector }: StudioOverlayP
   };
 
   const endDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pinchRef.current) {
+      // Hold the pinch until both fingers are off, so lifting one does not snap the design.
+      if (pointersRef.current.size < 2) pinchRef.current = null;
+      return;
+    }
+
     const m = marqueeRef.current;
     if (m) {
       marqueeRef.current = null;
