@@ -34,6 +34,7 @@ import { buildCaption } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
 import { MyDesigns } from "./ui/MyDesigns.tsx";
 import { Settings } from "./ui/Settings.tsx";
+import { contrastText, readableAccent } from "./util/contrast.ts";
 import { newChartLayer, newRouteLayer, newStatLayer, newStatRowLayer, newTextLayer } from "./model/defaults.ts";
 import { saveDoc, listDocs, loadDoc, deleteDoc, loadPrefs, savePrefs } from "./storage/db.ts";
 import {
@@ -176,6 +177,45 @@ export default function App() {
   // harness, which loads src/render.js as a raw ES module — so it is handed the answer
   // instead. Kept out of `opts` state on purpose: opts is saved into documents, and the
   // athlete's zones are session data that must not be frozen into a design (§7.4).
+  // Which theme is actually on screen. Held in state rather than read back off the DOM,
+  // because the accent below depends on it and effects run in declaration order — reading
+  // `dataset.theme` from the accent effect gave the light neutral on a dark-preferring
+  // browser, which the a11y suite caught as #1a1a1a on #38383a, 1.48:1.
+  const [resolvedTheme, setResolvedTheme] = useState("light");
+
+  // "auto" follows the OS and keeps following it, so a system change at dusk is picked up
+  // without a reload.
+  useEffect(() => {
+    const root = document.documentElement;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const choice = prefs.theme ?? "auto";
+      const next = choice === "auto" ? (media.matches ? "dark" : "light") : choice;
+      root.dataset.theme = next;
+      setResolvedTheme(next);
+      // The browser paints its own chrome around the page from this, so a stale value means
+      // a dark bar above a light app on a phone. Static markup cannot follow a toggle.
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", getComputedStyle(root).getPropertyValue("--bg").trim());
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [prefs.theme]);
+
+  // The chrome wears the look the athlete is designing in. `readableAccent` is what stops
+  // that going wrong: a look's accent is chosen against that look's own canvas, so
+  // blueprint's pure white would be an invisible selected-state border on an off-white
+  // chrome. When the accent cannot be seen, the neutral for the current theme stands in.
+  useEffect(() => {
+    const root = document.documentElement;
+    const chrome = getComputedStyle(root).getPropertyValue("--bg").trim();
+    const neutral = resolvedTheme === "dark" ? "#f2f2f2" : "#1a1a1a";
+    const accent = readableAccent(look?.colors?.accent, chrome, neutral);
+    root.style.setProperty("--accent", accent);
+    root.style.setProperty("--accent-contrast", contrastText(accent));
+  }, [look, resolvedTheme]);
+
   const renderOpts = useMemo(
     () => ({ ...opts, zones: zones?.bands ?? null, athleteHrMax }),
     [opts, zones, athleteHrMax],

@@ -38,6 +38,10 @@
      re-themed. The white-on-orange label is a known 3.3:1 a11y debt (CLAUDE.md). */
   --strava: #fc5200;
   --strava-hover: #ff6a1f;
+  /* Black on Strava orange is 6.35:1; the white it replaces was 3.31:1 against a 4.5:1
+     requirement, and was the only entry in the a11y suite's KNOWN_VIOLATIONS. Brand colour
+     is untouched — only the label. */
+  --on-strava: #000000;
 
   /* The stage is a viewport onto artwork, not chrome, so it stays dark in both themes —
      a light letterbox around a photograph reads as a blown-out border. */
@@ -122,7 +126,7 @@ hr{border:0;border-top:1px solid var(--border);margin:16px 0}
 .btn.primary{background:var(--accent);color:var(--accent-contrast);font-weight:600}
 .btn.primary:hover{background:var(--text)}
 .btn.primary:disabled{opacity:.4;cursor:not-allowed}
-.btn.strava{background:var(--strava);color:var(--on-stage);font-weight:600}
+.btn.strava{background:var(--strava);color:var(--on-strava);font-weight:600}
 .btn.strava:hover{background:var(--strava-hover)}
 .btn.block{display:flex;width:100%;margin-top:12px}
 .link{background:none;border:0;padding:0;text-decoration:underline;color:var(--text-muted);cursor:pointer;font-size:14px}

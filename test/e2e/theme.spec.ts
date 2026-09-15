@@ -29,15 +29,48 @@ test("the chrome resolves through custom properties on :root", async ({ page }) 
   }
 });
 
-test("the page is light, not near-black", async ({ page }) => {
-  await openApp(page);
+test.describe("with the OS set to light", () => {
+  test.use({ colorScheme: "light" });
 
-  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const [r = 0, g = 0, b = 0] = bg.match(/\d+/g)?.map(Number) ?? [];
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  test("the page is light, not near-black", async ({ page }) => {
+    await openApp(page);
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const [r = 0, g = 0, b = 0] = bg.match(/\d+/g)?.map(Number) ?? [];
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    // The old chrome scored about 0.09. A warm off-white is up near 0.95.
+    expect(luminance).toBeGreaterThan(0.8);
+  });
+});
 
-  // #161616 scores about 0.09. A warm off-white is up near 0.95.
-  expect(luminance).toBeGreaterThan(0.8);
+test.describe("with the OS set to dark", () => {
+  test.use({ colorScheme: "dark" });
+
+  test("the chrome follows the system by default", async ({ page }) => {
+    // PR-A9: "auto" is the default, so a dark-preferring browser gets the dark palette
+    // without anyone touching Settings.
+    await openApp(page);
+    expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
+  });
+
+  test("the accent stays legible against the dark chrome", async ({ page }) => {
+    // The bug this is here to stop: the accent effect used to read the theme off the DOM
+    // before the theme effect had written it, so a dark chrome got the light neutral —
+    // #1a1a1a on #38383a, 1.48:1, which the axe suite caught on the Add tab.
+    await openApp(page);
+    const { accent, bg } = await page.evaluate(() => {
+      const s = getComputedStyle(document.documentElement);
+      return { accent: s.getPropertyValue("--accent").trim(), bg: s.getPropertyValue("--bg").trim() };
+    });
+    const lum = (hex: string) => {
+      const ch = (i: number) => {
+        const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * ch(1) + 0.7152 * ch(3) + 0.0722 * ch(5);
+    };
+    const [hi, lo] = [lum(accent), lum(bg)].sort((a, b) => b - a) as [number, number];
+    expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(3);
+  });
 });
 
 test("no hardcoded lime or near-black survives in the stylesheet", async ({ page }) => {
@@ -58,13 +91,32 @@ test("no hardcoded lime or near-black survives in the stylesheet", async ({ page
 test("every colour literal lives in a token block", async ({ page }) => {
   await openApp(page);
 
+  // Walk the CSSOM rule by rule rather than regexing the whole sheet as one string. The
+  // string version took 15.9 minutes before failing — catastrophic backtracking on a
+  // stylesheet this size — and a test that slow is a test nobody will keep running.
   const stray = await page.evaluate(() => {
-    const css = Array.from(document.querySelectorAll("style"))
-      .map((s) => s.textContent ?? "")
-      .join("\n");
-    // Strip the :root and [data-theme] declaration blocks, which are where literals belong.
-    const withoutTokens = css.replace(/(:root|\[data-theme[^\]]*\])[^{]*\{[^}]*\}/g, "");
-    return [...withoutTokens.matchAll(/#[0-9a-f]{3,8}\b/gi)].map((m) => m[0]);
+    const found: string[] = [];
+    const isTokenBlock = (selector: string) =>
+      selector.startsWith(":root") || selector.includes("[data-theme");
+    const walk = (rules: CSSRuleList) => {
+      for (const rule of Array.from(rules)) {
+        if (rule instanceof CSSGroupingRule) {
+          walk(rule.cssRules);
+        } else if (rule instanceof CSSStyleRule) {
+          if (isTokenBlock(rule.selectorText)) continue;
+          const hits = rule.style.cssText.match(/#[0-9a-f]{3,8}\b/gi);
+          if (hits) found.push(...hits.map((h) => `${rule.selectorText}: ${h}`));
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        walk(sheet.cssRules);
+      } catch {
+        // A cross-origin sheet cannot be read; there are none in this single-file app.
+      }
+    }
+    return found;
   });
 
   // Anything left is a colour that cannot be changed by editing the palette.

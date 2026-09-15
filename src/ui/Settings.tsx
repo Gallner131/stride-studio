@@ -105,6 +105,22 @@ export function Settings({ onClose, onChange }: SettingsProps) {
           </section>
 
           <section>
+            <h3 className="label">Appearance</h3>
+            <label className="field">
+              <span className="muted small">Theme</span>
+              <select
+                value={prefs.theme ?? "auto"}
+                onChange={(e) => update("theme", e.target.value as Prefs["theme"])}
+                data-testid="prefs-theme"
+              >
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="auto">Match system</option>
+              </select>
+            </label>
+          </section>
+
+          <section>
             <h3 className="label">Editor</h3>
             <label className="row">
               <span className="small">Show safe zones by default</span>

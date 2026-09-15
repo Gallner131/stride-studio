@@ -122,9 +122,17 @@ export interface Prefs {
   hrMax: number | null;
   safeZones: boolean;
   lastDocId: string | null;
+  /** "auto" follows the OS. Absent means auto, so existing stored prefs need no migration. */
+  theme?: "light" | "dark" | "auto";
 }
 
-export const DEFAULT_PREFS: Prefs = { units: "km", hrMax: null, safeZones: false, lastDocId: null };
+export const DEFAULT_PREFS: Prefs = {
+  units: "km",
+  hrMax: null,
+  safeZones: false,
+  lastDocId: null,
+  theme: "auto",
+};
 
 export function loadPrefs(): Prefs {
   try {
