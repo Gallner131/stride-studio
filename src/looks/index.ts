@@ -60,7 +60,7 @@ export const LOOKS: Look[] = [
 
 export const LOOK_BY_ID = new Map(LOOKS.map((l) => [l.id, l]));
 
-export const DEFAULT_LOOK_ID = "clean";
+export const DEFAULT_LOOK_ID = "paper";
 
 export const getLook = (id: string | null | undefined): Look | null =>
   (id ? LOOK_BY_ID.get(id) : null) ?? null;
