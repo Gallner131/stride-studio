@@ -29,7 +29,10 @@ const scan = (builder: AxeBuilder) => builder.withTags(["wcag2a", "wcag2aa"]).an
  *
  * Delete an entry when it is fixed; the test then holds the new, better standard.
  */
-const KNOWN_VIOLATIONS: { id: string; target: string }[] = [{ id: "color-contrast", target: ".strava" }];
+// Empty, and worth keeping that way. The one entry here was the Connect Strava button,
+// white on Strava orange at 3.31:1 against a 4.5:1 requirement, on every screen. Its label
+// is black now (6.35:1) and the exemption is gone with it.
+const KNOWN_VIOLATIONS: { id: string; target: string }[] = [];
 
 const isKnown = (id: string, target: string) =>
   KNOWN_VIOLATIONS.some((k) => k.id === id && target.includes(k.target));

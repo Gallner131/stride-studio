@@ -35,7 +35,7 @@ async function bundle() {
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stride Studio</title>
-<meta name="theme-color" content="#161616">
+<meta name="theme-color" content="#f5f4f1">
 <meta name="description" content="Turn a run or workout into a post you're proud of.">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon.svg">
