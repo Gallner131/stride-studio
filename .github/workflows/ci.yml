@@ -1,0 +1,132 @@
+name: CI
+
+# Spec §11.1: typecheck -> lint -> unit -> build -> size budget -> e2e/golden.
+# Nothing reaches main red (§12.6).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TZ: UTC
+
+jobs:
+  checks:
+    name: typecheck · lint · unit · build · size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run lint:looks
+      - run: npm test
+      - run: npm run build
+      - run: npm run size
+      - name: Fail if dist/ or a root index.html was committed
+        # §11.4 and CLAUDE.md rule 3: CI builds the bundle; the repo must not carry it.
+        run: |
+          if git ls-files --error-unmatch index.html >/dev/null 2>&1; then
+            echo "::error::index.html is committed at the repo root. CI builds dist/ — remove it."
+            exit 1
+          fi
+          if git ls-files dist | grep -q .; then
+            echo "::error::dist/ is committed. CI builds it — remove it."
+            exit 1
+          fi
+
+  e2e:
+    name: e2e (mobile + desktop)
+    runs-on: ubuntu-latest
+    # Same pinned image as the goldens, so one browser build serves both suites.
+    # No setup-node step: the image already ships Node and the matching browsers.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright test --project=e2e-mobile --project=e2e-desktop
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  golden:
+    name: golden renders (pinned container)
+    runs-on: ubuntu-latest
+    # The goldens are only comparable inside one fixed OS + fontconfig, because the legacy
+    # renderer draws with system fonts (§1.2 E3). This image IS the golden environment;
+    # changing its tag requires re-recording the baseline in a labelled PR.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      GOLDEN_ENV: pinned
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Needed to diff the goldens against the PR base below.
+          fetch-depth: 0
+      - run: npm ci
+
+      - name: Structural smoke over the whole matrix
+        run: npx playwright test --project=golden --grep "structural smoke"
+
+      - name: Check the golden baseline exists
+        run: |
+          count=$(ls test/golden/__snapshots__/*.png 2>/dev/null | wc -l)
+          echo "goldens on disk: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No golden baseline committed. Run the golden-update workflow first (§12.2)."
+            exit 1
+          fi
+
+      - name: Compare against the golden baseline
+        run: npx playwright test --project=golden --grep "Matrix A"
+
+      - name: Guard against unlabelled golden changes
+        # §12.2: updating goldens is deliberate. A PR that changes them must say so.
+        #
+        # BASE_REF and HAS_LABEL go through the environment rather than being interpolated
+        # into the script: a branch name is attacker-controlled on a fork PR, and
+        # "${{ github.base_ref }}" inside a run block would be a shell injection.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'golden-update') }}
+        run: |
+          git fetch --no-tags --depth=1 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          if git diff --name-only "origin/$BASE_REF...HEAD" -- test/golden/__snapshots__ | grep -q .; then
+            echo "goldens changed in this PR"
+            if [ "$HAS_LABEL" != "true" ]; then
+              echo "::error::This PR changes committed goldens but is not labelled 'golden-update' (§12.2)."
+              exit 1
+            fi
+            echo "labelled golden-update — allowed"
+          else
+            echo "no golden changes"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: golden-diffs
+          path: test/golden/diffs/
+          retention-days: 14
