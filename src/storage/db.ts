@@ -131,7 +131,7 @@ export const DEFAULT_PREFS: Prefs = {
   hrMax: null,
   safeZones: false,
   lastDocId: null,
-  theme: "auto",
+  theme: "light",
 };
 
 export function loadPrefs(): Prefs {

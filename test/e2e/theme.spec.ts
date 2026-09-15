@@ -45,10 +45,18 @@ test.describe("with the OS set to light", () => {
 test.describe("with the OS set to dark", () => {
   test.use({ colorScheme: "dark" });
 
-  test("the chrome follows the system by default", async ({ page }) => {
-    // PR-A9: "auto" is the default, so a dark-preferring browser gets the dark palette
-    // without anyone touching Settings.
+  test("the chrome is light even on a dark-preferring device, until asked otherwise", async ({ page }) => {
+    // The default is "light", not "auto". Matching the system sounded right and was wrong:
+    // most phones are in dark mode, so the light chrome this whole redesign is about was
+    // invisible to the people who asked for it. Dark is a choice in Settings, not a default.
     await openApp(page);
+    expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe("light");
+  });
+
+  test("choosing dark in Settings still wins over the default", async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId("settings-button").click();
+    await page.getByTestId("prefs-theme").selectOption("dark");
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
   });
 

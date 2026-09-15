@@ -94,7 +94,7 @@ function ManualForm({ act, onChange }) {
 export default function App() {
   const [media, setMedia] = useState(null);
   const [act, setAct] = useState(DEMO);
-  const [template, setTemplate] = useState("sticker");
+  const [template, setTemplate] = useState("poster");
   const [opts, setOpts] = useState(DEFAULT_OPTS);
   const [format, setFmt] = useState("story");
   const [tab, setTab] = useState("designs");
@@ -408,7 +408,7 @@ export default function App() {
       const saved = await loadDoc(lastDocId);
       if (saved && saved.layers.length > 0) {
         setStoreDoc(saved);
-        setTemplate(saved.templateId || "sticker");
+        setTemplate(saved.templateId || "poster");
         setFmt(saved.format || "story");
         if (saved.opts && Object.keys(saved.opts).length) setOpts((o) => ({ ...o, ...saved.opts }));
         say("Picked up where you left off");
@@ -824,6 +824,9 @@ export default function App() {
     <div className="app">
       <div className="wrap">
         <section className="preview">
+          {/* Pinned on a phone. Choosing a design meant scrolling the canvas off screen,
+              picking blind, then scrolling back to see what happened. */}
+          <div className="preview-pinned">
           <div className="row" style={{ marginBottom: 10 }}>
             <h1>
               Stride Studio{" "}
@@ -852,6 +855,7 @@ export default function App() {
             {/* Offered whenever there is an animation to replay. It used to require media,
                 so on the default empty canvas there was no way to watch it twice. */}
             {opts.animate && <button type="button" className="replay" onClick={() => setAnimKey((k) => k + 1)} title="Replay animation" data-testid="replay">↻</button>}
+          </div>
           </div>
           <div className="btnrow toolbar">
             <button type="button" className="btn" onClick={() => undo()} disabled={!canUndo} title="Undo" data-testid="undo">↶</button>
