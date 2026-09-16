@@ -176,6 +176,40 @@ describe.each(TEMPLATES.map((t) => [t.id, t] as const))("template %s", (id, def)
   });
 });
 
+/**
+ * Several style fields are FRACTIONS of another size, not pixel values, and they sit in the
+ * same object as fields that are pixel values. `unitSize` multiplies `valueSize`;
+ * `letterSpacing` multiplies `size`. Passing 60 where 0.34 was meant renders a unit at
+ * `230 x 60` — a font nearly fourteen thousand pixels tall, which lands on the canvas as a
+ * black slab the size of the page and reads as an engine fault rather than a typo.
+ *
+ * Both mistakes shipped into these templates and were only caught by looking at a render.
+ * This is the check that would have caught them in a second.
+ */
+describe("ratio fields are ratios", () => {
+  const RATIOS: Array<{ key: string; min: number; max: number }> = [
+    { key: "unitSize", min: 0, max: 1.5 },
+    { key: "letterSpacing", min: -0.5, max: 0.5 },
+    { key: "lineHeight", min: 0.5, max: 3 },
+  ];
+
+  it("never carries a pixel value in a field that multiplies another size", () => {
+    const wrong: string[] = [];
+    for (const t of TEMPLATES) {
+      for (const layer of t.layers) {
+        const style = (layer as { style?: Record<string, unknown> }).style;
+        if (!style) continue;
+        for (const { key, min, max } of RATIOS) {
+          const v = style[key];
+          if (typeof v !== "number") continue;
+          if (v < min || v > max) wrong.push(`${t.id}/${layer.name ?? layer.type}: ${key} = ${v}`);
+        }
+      }
+    }
+    expect(wrong, wrong.join("\n")).toEqual([]);
+  });
+});
+
 describe("the catalogue as a whole", () => {
   it("has no duplicate ids", () => {
     const ids = TEMPLATES.map((t) => t.id);

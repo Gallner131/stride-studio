@@ -2867,7 +2867,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.5, ay: 0.5 },
         origin: { ox: 0.5, oy: 0 },
         offset: { dx: 0, dy: 90 },
-        style: { valueSize: 230, valueWeight: 800, valueColor: WHITE, unitSize: 60 },
+        style: { valueSize: 230, valueWeight: 800, valueColor: WHITE, unitSize: 0.34 },
       },
       {
         type: "statRow",
@@ -2909,7 +2909,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.08, ay: 0 },
         origin: { ox: 0, oy: 0 },
         offset: { dx: 0, dy: 380 },
-        style: { valueSize: 200, valueWeight: 800, valueColor: WHITE, labelColor: MUTED, unitSize: 54 },
+        style: { valueSize: 200, valueWeight: 800, valueColor: WHITE, labelColor: MUTED, unitSize: 0.34 },
       },
       {
         type: "stat",
@@ -3016,7 +3016,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.08, ay: 0 },
         origin: { ox: 0, oy: 0 },
         offset: { dx: 0, dy: 320 },
-        style: { size: 32, weight: 700, color: VOLT, align: "left", letterSpacing: 3, maxWidth: 840 },
+        style: { size: 32, weight: 700, color: VOLT, align: "left", letterSpacing: 0.12, maxWidth: 840 },
       },
       {
         type: "stat",
@@ -3029,7 +3029,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.08, ay: 0 },
         origin: { ox: 0, oy: 0 },
         offset: { dx: 0, dy: 390 },
-        style: { valueSize: 260, valueWeight: 800, valueColor: WHITE, unitSize: 70 },
+        style: { valueSize: 260, valueWeight: 800, valueColor: WHITE, unitSize: 0.34 },
       },
       {
         type: "chart",
@@ -3073,7 +3073,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.08, ay: 0 },
         origin: { ox: 0, oy: 0 },
         offset: { dx: 0, dy: 340 },
-        style: { valueSize: 250, valueWeight: 800, valueColor: WHITE, labelColor: MUTED, unitSize: 62 },
+        style: { valueSize: 250, valueWeight: 800, valueColor: WHITE, labelColor: MUTED, unitSize: 0.34 },
       },
       {
         type: "chart",
@@ -3135,7 +3135,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.5, ay: 0.5 },
         origin: { ox: 0.5, oy: 0 },
         offset: { dx: 0, dy: 10 },
-        style: { valueSize: 130, valueWeight: 700, valueColor: WHITE, unitSize: 40 },
+        style: { valueSize: 130, valueWeight: 700, valueColor: WHITE, unitSize: 0.34 },
       },
       {
         type: "shape",
@@ -3174,7 +3174,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.08, ay: 0 },
         origin: { ox: 0, oy: 0 },
         offset: { dx: 0, dy: 300 },
-        style: { size: 36, weight: 800, color: VOLT, align: "left", letterSpacing: 6, maxWidth: 840 },
+        style: { size: 36, weight: 800, color: VOLT, align: "left", letterSpacing: 0.12, maxWidth: 840 },
       },
       {
         type: "chart",
@@ -3264,7 +3264,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.08, ay: 0 },
         origin: { ox: 0, oy: 0 },
         offset: { dx: 0, dy: 320 },
-        style: { size: 36, weight: 800, color: VOLT, align: "left", maxWidth: 840 },
+        style: { size: 36, weight: 800, color: VOLT, align: "left", letterSpacing: 0.14, maxWidth: 840 },
       },
       {
         type: "chart",
@@ -3325,7 +3325,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.5, ay: 0.5 },
         origin: { ox: 0.5, oy: 1 },
         offset: { dx: 0, dy: -300 },
-        style: { size: 34, weight: 800, color: VOLT, align: "center", maxWidth: 780 },
+        style: { size: 34, weight: 800, color: VOLT, align: "center", letterSpacing: 0.18, maxWidth: 780 },
       },
       {
         type: "stat",
@@ -3338,7 +3338,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.5, ay: 0.5 },
         origin: { ox: 0.5, oy: 1 },
         offset: { dx: 0, dy: -40 },
-        style: { valueSize: 210, valueWeight: 800, valueColor: WHITE, unitSize: 56 },
+        style: { valueSize: 210, valueWeight: 800, valueColor: WHITE, unitSize: 0.34 },
       },
       {
         type: "shape",
@@ -3391,7 +3391,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.08, ay: 0.5 },
         origin: { ox: 0, oy: 1 },
         offset: { dx: 0, dy: -20 },
-        style: { valueSize: 150, valueWeight: 800, valueColor: WHITE, labelColor: MUTED, unitSize: 44 },
+        style: { valueSize: 150, valueWeight: 800, valueColor: WHITE, labelColor: MUTED, unitSize: 0.34 },
       },
       {
         type: "stat",
@@ -3539,7 +3539,7 @@ export const TEMPLATES: TemplateDef[] = [
         anchor: { ax: 0.06, ay: 1 },
         origin: { ox: 0, oy: 1 },
         offset: { dx: 0, dy: -420 },
-        style: { valueSize: 240, valueWeight: 800, valueColor: WHITE, unitSize: 64 },
+        style: { valueSize: 240, valueWeight: 800, valueColor: WHITE, unitSize: 0.34 },
       },
       {
         type: "statRow",
@@ -3650,7 +3650,7 @@ export const TEMPLATES: TemplateDef[] = [
           weight: 600,
           color: VOLT,
           align: "left",
-          letterSpacing: 3,
+          letterSpacing: 0.12,
           uppercase: true,
           maxWidth: 840,
         },
