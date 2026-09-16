@@ -43,9 +43,13 @@ export function tokenTable(look: Look): Record<string, string | number | string[
     accent: look.colors.accent,
     accent2: look.colors.accent2,
     // fonts resolve to the legacy stacks for now, so a look looks right today (§5.6)
-    display: look.legacyFonts.display,
-    body: look.legacyFonts.body,
-    mono: "mono",
+    // The real face the look asked for, with the system stack behind it. `legacyFonts` was
+    // the stand-in "until §5.6's real faces are bundled" — they are bundled now, and while
+    // this still pointed at the fallback every look rendered in Impact regardless of what
+    // it declared. That one line is why fourteen looks shared one typeface.
+    display: look.fonts.display || look.legacyFonts.display,
+    body: look.fonts.body || look.legacyFonts.body,
+    mono: look.fonts.mono || "mono",
     // shape and type
     radius: look.shape.radius,
     pad: look.shape.pad,

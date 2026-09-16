@@ -27,6 +27,7 @@ import {
   toBlob as canvasToBlob,
 } from "./export/image.ts";
 import { canUseWebCodecs, exportVideo, MAX_CLIP_SECONDS } from "./export/video.ts";
+import { BUNDLED_FAMILIES } from "./engine/text.ts";
 import { unregisterServiceWorker } from "./pwa/register.ts";
 import * as Strava from "./data/strava.ts";
 import { parseHeartRateZones, resolveAthleteHrMax, resolveZones, zoneOfBands } from "./data/hr.ts";
@@ -450,6 +451,31 @@ export default function App() {
   // null means "draw nothing at all" — a sticker export of a Design is just its layers.
   const legacyMode = (d, mode) => (designOwnsCanvas(d) ? (mode === "sticker" ? null : "background") : mode);
 
+  // The canvas paints once and holds; it does not re-run when a web font finishes loading.
+  // So a design drawn before the faces arrive stays drawn in the fallback — Impact where the
+  // look asked for Monoton — and looks like the bundling did nothing. One redraw once the
+  // fonts are ready fixes it, and after that they are in the browser's cache.
+  const [fontsReady, setFontsReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const fonts = document.fonts;
+    if (!fonts) {
+      setFontsReady(true);
+      return;
+    }
+    // Every family has to be asked for by name. Canvas will not request one and neither will
+    // fonts.ready, which resolves straight away because nothing is pending — the faces sit
+    // there "unloaded" and every design draws in the fallback.
+    Promise.all(BUNDLED_FAMILIES.map((family) => fonts.load(`700 32px "${family}"`).catch(() => null)))
+      .then(() => fonts.ready)
+      .then(() => {
+        if (live) setFontsReady(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   const draw = useCallback(() => {
     const c = canvasRef.current; if (!c) return;
     const { media, act, template, opts, format } = stateRef.current;
@@ -511,7 +537,7 @@ export default function App() {
     return () => { alive = false; cancelAnimationFrame(raf); };
   // animKey is in here because the loop stops once the animation settles; pressing Replay
   // resets the clock, and without a dependency on it nothing would start drawing again.
-  }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look, animKey]);
+  }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look, animKey, fontsReady]);
 
   // ---- Strava (§7.2) ----
   //

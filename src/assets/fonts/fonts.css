@@ -1,0 +1,113 @@
+/* Bundled display faces — §5.6.
+ *
+ * Every look already named the face it wanted (neon wants Monoton, journal wants a serif,
+ * kit wants Rubik Mono One) and every one of them fell back to `legacyFonts` — which is to
+ * say Impact, in a colour. Fourteen looks, one typeface. This is what makes them distinct.
+ *
+ * Subset to Latin, digits and the punctuation the templates actually use, which takes each
+ * face to 8-16KB. The whole set is ~152KB, inlined as data URIs because the app ships as a
+ * single self-contained index.html. The brief asked for 450KB of fonts; that does not fit a
+ * 450KB budget alongside the app, so these are subset harder than it suggested.
+ *
+ * font-display is deliberately `block`: the canvas paints once and does not re-run on a
+ * font swap, so a face arriving late would leave the design drawn in the fallback. App.jsx
+ * waits on document.fonts.ready before the first draw for the same reason.
+ */
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("./bebas.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Anton";
+  src: url("./anton.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Archivo Black";
+  src: url("./archivo-black.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./inter.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("./space-grotesk.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Playfair Display";
+  src: url("./playfair.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./jetbrains-mono.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("./fraunces.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./instrument.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Monoton";
+  src: url("./monoton.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Rubik Mono One";
+  src: url("./rubikmono.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Big Shoulders Display";
+  src: url("./shoulders.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Syne";
+  src: url("./syne.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Unbounded";
+  src: url("./unbounded.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+}

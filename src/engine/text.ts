@@ -2,13 +2,55 @@
 import type { TextStyle } from "../model/types";
 
 export const FONT_STACKS: Record<string, string> = {
-  sans: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  cond: 'Impact, "Arial Narrow", "Helvetica Neue", Arial, sans-serif',
-  serif: 'Georgia, "Times New Roman", serif',
-  mono: '"SF Mono", Menlo, Consolas, "Courier New", monospace',
+  // Bundled faces, named by the id every look already uses (src/looks/*.json).
+  bebas: '"Bebas Neue", Impact, "Arial Narrow", sans-serif',
+  anton: '"Anton", Impact, "Arial Narrow", sans-serif',
+  archivo: '"Archivo Black", Impact, system-ui, sans-serif',
+  inter: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  grotesk: '"Space Grotesk", system-ui, -apple-system, sans-serif',
+  playfair: '"Playfair Display", Georgia, "Times New Roman", serif',
+  jetbrains: '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace',
+  fraunces: '"Fraunces", Georgia, "Times New Roman", serif',
+  instrument: '"Instrument Serif", Georgia, "Times New Roman", serif',
+  monoton: '"Monoton", Impact, "Arial Narrow", sans-serif',
+  rubikmono: '"Rubik Mono One", Impact, system-ui, sans-serif',
+  shoulders: '"Big Shoulders Display", Impact, "Arial Narrow", sans-serif',
+  syne: '"Syne", system-ui, -apple-system, sans-serif',
+  unbounded: '"Unbounded", Impact, system-ui, sans-serif',
+
+  // The legacy ids the 27 original templates still ask for.
+  sans: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  cond: '"Bebas Neue", Impact, "Arial Narrow", "Helvetica Neue", Arial, sans-serif',
+  serif: '"Fraunces", Georgia, "Times New Roman", serif',
+  mono: '"JetBrains Mono", "SF Mono", Menlo, Consolas, "Courier New", monospace',
   script: '"Brush Script MT", "Segoe Script", "Bradley Hand", "Comic Sans MS", cursive',
   rounded: '"SF Pro Rounded", "Arial Rounded MT Bold", Nunito, "Varela Round", system-ui, sans-serif',
 };
+
+/**
+ * The bundled families, for the one thing a browser will not do by itself.
+ *
+ * A canvas `ctx.font` that names a web font does NOT trigger that font to load — it silently
+ * falls back and never tells you. `document.fonts.ready` resolves immediately because
+ * nothing is pending. So every face here reports "unloaded" and every design renders in
+ * Impact unless something asks for them explicitly, which src/App.jsx does on startup.
+ */
+export const BUNDLED_FAMILIES = [
+  "Bebas Neue",
+  "Anton",
+  "Archivo Black",
+  "Inter",
+  "Space Grotesk",
+  "Playfair Display",
+  "JetBrains Mono",
+  "Fraunces",
+  "Instrument Serif",
+  "Monoton",
+  "Rubik Mono One",
+  "Big Shoulders Display",
+  "Syne",
+  "Unbounded",
+] as const;
 
 const SANS_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 

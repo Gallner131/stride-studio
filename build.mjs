@@ -26,7 +26,7 @@ async function bundle() {
         new Date().toISOString().slice(5, 16).replace("T", " ").replace("-", "/"),
       ),
     },
-    loader: { ".css": "css" },
+    loader: { ".css": "css", ".woff2": "dataurl" },
     outdir: "dist",
   });
   const js = r.outputFiles.find((f) => f.path.endsWith(".js")).text;

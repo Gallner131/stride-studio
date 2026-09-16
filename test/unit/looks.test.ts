@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FONT_STACKS } from "../../src/engine/text";
 import {
   FAMILY_ORDER,
   groupByFamily,
@@ -95,9 +96,22 @@ describe("token resolution", () => {
     expect(resolveTokens("$brandColour", tokens)).toBe("$brandColour");
   });
 
-  it("resolves fonts to the legacy stacks until the real faces are bundled (§5.6)", () => {
-    expect(resolveTokens("$display", tokens)).toBe("cond");
-    expect(resolveTokens("$body", tokens)).toBe("sans");
+  it("resolves fonts to the face the look actually asked for (§5.6)", () => {
+    // These used to resolve to `legacyFonts` — "cond" and "sans" — which was the stand-in
+    // until the real faces were bundled. They are bundled now, and while this still pointed
+    // at the fallback every one of the twenty-four looks rendered in Impact no matter which
+    // typeface it declared.
+    const look = LOOKS.find((l) => l.id === "neon");
+    const neon = tokenTable(look!);
+    expect(resolveTokens("$display", neon)).toBe("monoton");
+    expect(resolveTokens("$body", neon)).toBe("inter");
+  });
+
+  it("every look names a display face that is actually bundled", () => {
+    const missing = LOOKS.filter((l) => !FONT_STACKS[l.fonts.display]).map(
+      (l) => `${l.id}: ${l.fonts.display}`,
+    );
+    expect(missing, missing.join(", ")).toEqual([]);
   });
 });
 
