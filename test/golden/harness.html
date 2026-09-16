@@ -4,6 +4,125 @@
     <meta charset="utf-8" />
     <title>Stride Studio — golden render harness</title>
     <style>
+      /* The same faces the app bundles. Without these the goldens would measure the legacy
+         renderer in system fallbacks while every real user sees Inter, Bebas and Fraunces —
+         a fence around a picture nobody is looking at. Loaded explicitly below, because a
+         canvas ctx.font does not trigger a font to load. */
+/* Bundled display faces — §5.6.
+ *
+ * Every look already named the face it wanted (neon wants Monoton, journal wants a serif,
+ * kit wants Rubik Mono One) and every one of them fell back to `legacyFonts` — which is to
+ * say Impact, in a colour. Fourteen looks, one typeface. This is what makes them distinct.
+ *
+ * Subset to Latin, digits and the punctuation the templates actually use, which takes each
+ * face to 8-16KB. The whole set is ~152KB, inlined as data URIs because the app ships as a
+ * single self-contained index.html. The brief asked for 450KB of fonts; that does not fit a
+ * 450KB budget alongside the app, so these are subset harder than it suggested.
+ *
+ * font-display is deliberately `block`: the canvas paints once and does not re-run on a
+ * font swap, so a face arriving late would leave the design drawn in the fallback. App.jsx
+ * waits on document.fonts.ready before the first draw for the same reason.
+ */
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("../../src/assets/fonts/bebas.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Anton";
+  src: url("../../src/assets/fonts/anton.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Archivo Black";
+  src: url("../../src/assets/fonts/archivo-black.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("../../src/assets/fonts/inter.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("../../src/assets/fonts/space-grotesk.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Playfair Display";
+  src: url("../../src/assets/fonts/playfair.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../../src/assets/fonts/jetbrains-mono.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("../../src/assets/fonts/fraunces.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("../../src/assets/fonts/instrument.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Monoton";
+  src: url("../../src/assets/fonts/monoton.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Rubik Mono One";
+  src: url("../../src/assets/fonts/rubikmono.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Big Shoulders Display";
+  src: url("../../src/assets/fonts/shoulders.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Syne";
+  src: url("../../src/assets/fonts/syne.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Unbounded";
+  src: url("../../src/assets/fonts/unbounded.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+}
+
+
       body { margin: 0; background: #141414; color: #f2f2f2; font: 14px system-ui, sans-serif; }
       #log { padding: 12px; }
       canvas { display: block; margin: 8px 0; max-width: 300px; }
@@ -187,6 +306,10 @@
       document.getElementById("log").textContent =
         `harness ready — ${window.__golden.matrix.length} cells ` +
         `(${composition} composition @ ${WIDTHS.sticker}px + ${withPhoto} photo compositing @ ${WIDTHS.photo}px)`;
+      await Promise.all(
+        [...document.fonts].map((f) => f.load().catch(() => null)),
+      );
+      await document.fonts.ready;
       document.body.dataset.ready = "1";
     </script>
   </body>

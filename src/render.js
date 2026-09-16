@@ -141,13 +141,28 @@ export const FILTERS = [
   { id: "vhs", name: "VHS", css: "contrast(1.15) saturate(1.5) hue-rotate(8deg) brightness(0.95)" },
   { id: "bleach", name: "Bleach", css: "contrast(1.3) saturate(0.4) brightness(1.15)" },
 ];
+// The six original ids keep their meaning — saved designs store `opts.fontHero` by id — but
+// each now leads with the bundled face it always wanted. The eight below them are new
+// choices, so the Style picker offers fourteen typefaces rather than six system stacks.
+//
+// Plain strings, because src/render.js cannot import: the golden harness loads it as a raw
+// ES module and one import line makes all 354 cells time out. test/golden/harness.html
+// loads the same @font-face declarations so the goldens measure what people actually see.
 export const FONTS = [
-  { id: "sans", name: "Modern", css: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' },
-  { id: "cond", name: "Condensed", css: 'Impact, "Arial Narrow", "Helvetica Neue", Arial, sans-serif' },
-  { id: "serif", name: "Editorial", css: 'Georgia, "Times New Roman", serif' },
-  { id: "mono", name: "Mono", css: '"SF Mono", Menlo, Consolas, "Courier New", monospace' },
+  { id: "sans", name: "Modern", css: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' },
+  { id: "cond", name: "Condensed", css: '"Bebas Neue", Impact, "Arial Narrow", "Helvetica Neue", Arial, sans-serif' },
+  { id: "serif", name: "Editorial", css: '"Fraunces", Georgia, "Times New Roman", serif' },
+  { id: "mono", name: "Mono", css: '"JetBrains Mono", "SF Mono", Menlo, Consolas, "Courier New", monospace' },
   { id: "script", name: "Handwritten", css: '"Brush Script MT", "Segoe Script", "Bradley Hand", "Comic Sans MS", cursive' },
   { id: "rounded", name: "Rounded", css: '"SF Pro Rounded", "Arial Rounded MT Bold", "Nunito", "Varela Round", system-ui, sans-serif' },
+  { id: "anton", name: "Heavy", css: '"Anton", Impact, "Arial Narrow", sans-serif' },
+  { id: "archivo", name: "Block", css: '"Archivo Black", Impact, system-ui, sans-serif' },
+  { id: "grotesk", name: "Grotesk", css: '"Space Grotesk", system-ui, -apple-system, sans-serif' },
+  { id: "playfair", name: "High serif", css: '"Playfair Display", Georgia, "Times New Roman", serif' },
+  { id: "instrument", name: "Quiet serif", css: '"Instrument Serif", Georgia, "Times New Roman", serif' },
+  { id: "monoton", name: "Neon", css: '"Monoton", Impact, "Arial Narrow", sans-serif' },
+  { id: "shoulders", name: "Tall", css: '"Big Shoulders Display", Impact, "Arial Narrow", sans-serif' },
+  { id: "unbounded", name: "Wide", css: '"Unbounded", Impact, system-ui, sans-serif' },
 ];
 export const BACKGROUNDS = [
   { id: "night", name: "Night", stops: ["#0f0c29", "#302b63", "#24243e"] },
@@ -169,8 +184,8 @@ export const DEFAULT_OPTS = {
 
 const DEF_SANS = FONTS[0].css;
 const DEF_COND = FONTS[1].css;
-const SERIF = 'Georgia, "Times New Roman", serif';
-const MONO = '"SF Mono", Menlo, Consolas, "Courier New", monospace';
+const SERIF = '"Fraunces", Georgia, "Times New Roman", serif';
+const MONO = '"JetBrains Mono", "SF Mono", Menlo, Consolas, "Courier New", monospace';
 const SCRIPT = '"Brush Script MT", "Segoe Script", "Bradley Hand", "Comic Sans MS", cursive';
 
 // ---- primitives ----
