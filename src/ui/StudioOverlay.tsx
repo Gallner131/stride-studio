@@ -28,6 +28,13 @@ export interface StudioOverlayProps {
   asset: (assetId: string) => CanvasImageSource | null;
   /** Opens the full Inspector, for everything the selection toolbar deliberately omits. */
   onOpenInspector?: () => void;
+  /**
+   * Pinching with nothing selected adjusts the PHOTO — zoom and pan — rather than the
+   * layers. That is what the gesture means to anyone who has used a phone: you pinch a
+   * picture to frame it. Layer transforms need something selected first.
+   */
+  photo?: { zoom: number; panX: number; panY: number } | null;
+  onPhotoTransform?: (next: { zoom: number; panX: number; panY: number }) => void;
 }
 
 /**
@@ -36,7 +43,13 @@ export interface StudioOverlayProps {
  * Sits above the design canvas and owns selection, drag, resize, rotate and inline text
  * editing. The render engine never draws handles or guides; they live here (§5.2 step 5).
  */
-export function StudioOverlay({ fields, asset, onOpenInspector }: StudioOverlayProps) {
+export function StudioOverlay({
+  fields,
+  asset,
+  onOpenInspector,
+  photo,
+  onPhotoTransform,
+}: StudioOverlayProps) {
   const doc = useEditor((s) => s.doc);
   const selection = useEditor((s) => s.selection);
   const safeZones = useEditor((s) => s.safeZones);
@@ -132,6 +145,7 @@ export function StudioOverlay({ fields, asset, onOpenInspector }: StudioOverlayP
     cx: number;
     cy: number;
     targets: Array<{ id: string; dx: number; dy: number; w?: number; h?: number; size?: number }>;
+    photo: { zoom: number; panX: number; panY: number } | null;
   }>(null);
 
   const pinchCentre = () => {
@@ -145,11 +159,17 @@ export function StudioOverlay({ fields, asset, onOpenInspector }: StudioOverlayP
   const beginPinch = () => {
     const c = pinchCentre();
     if (!c || c.dist < 1) return;
+    // Nothing selected and a photo behind: frame the photo.
+    if (selection.length === 0 && photo && onPhotoTransform) {
+      pinchRef.current = { dist: c.dist, cx: c.cx, cy: c.cy, targets: [], photo: { ...photo } };
+      return;
+    }
     const ids = selection.length > 0 ? selection : doc.layers.map((l) => l.id);
     pinchRef.current = {
       dist: c.dist,
       cx: c.cx,
       cy: c.cy,
+      photo: null,
       targets: ids.flatMap((id) => {
         const l = doc.layers.find((x) => x.id === id);
         if (!l) return [];
@@ -171,6 +191,20 @@ export function StudioOverlay({ fields, asset, onOpenInspector }: StudioOverlayP
     const start = pinchRef.current;
     const c = pinchCentre();
     if (!start || !c) return;
+
+    if (start.photo && onPhotoTransform) {
+      const scale = Math.max(0.25, Math.min(6, c.dist / start.dist));
+      const zoom = Math.max(1, Math.min(4, start.photo.zoom * scale));
+      // Pan is a fraction of the overflow, and the overflow only exists once zoomed in, so
+      // the same finger travel moves further the closer you are.
+      const reach = Math.max(1, (zoom - 1) * 400);
+      onPhotoTransform({
+        zoom,
+        panX: Math.max(-1, Math.min(1, start.photo.panX - (c.cx - start.cx) / reach)),
+        panY: Math.max(-1, Math.min(1, start.photo.panY - (c.cy - start.cy) / reach)),
+      });
+      return;
+    }
     // Clamped so a clumsy pinch cannot shrink the design to nothing or blow it off the page.
     const scale = Math.max(0.3, Math.min(4, c.dist / start.dist));
     const moveX = (c.cx - start.cx) * unitsPerPx();

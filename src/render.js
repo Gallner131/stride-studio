@@ -179,7 +179,7 @@ export const DEFAULT_OPTS = {
   show: { row: true, meta: true, name: true }, bg: "night", offsetX: 0,
   theme: "light", accent: "#FFFFFF", position: "bottom", showMap: true, filter: "none",
   units: "km", stats: { time: true, pace: true, elev: true, hr: false, cal: false, date: true },
-  scale: 1, offsetY: 0, zoom: 1, vignette: 0.25, dim: 0, animate: true, kenburns: true, grain: 0,
+  scale: 1, offsetY: 0, zoom: 1, panX: 0, panY: 0, vignette: 0.25, dim: 0, animate: true, kenburns: true, grain: 0,
 };
 
 const DEF_SANS = FONTS[0].css;
@@ -190,15 +190,24 @@ const SCRIPT = '"Brush Script MT", "Segoe Script", "Bradley Hand", "Comic Sans M
 
 // ---- primitives ----
 function mediaSize(media) { const el = media.el; return media.type === "video" ? [el.videoWidth, el.videoHeight] : [el.naturalWidth, el.naturalHeight]; }
-function drawCover(ctx, media, zoom, filterCss, box) {
+// `pan` is -1..1 on each axis: the fraction of the overflow to slide the photo by. Zero is
+// centred, which is all this could do before — you could zoom into a photo but not choose
+// which part of it you were zooming into, so a runner at the edge of the frame was simply
+// unreachable. The overflow is the only distance worth panning; past it you would expose the
+// background, so it is clamped to the picture's own edges.
+function drawCover(ctx, media, zoom, filterCss, box, pan) {
   box = box || { x: 0, y: 0, w: W, h: H };
   const [mw, mh] = mediaSize(media);
   if (!mw || !mh) return;
   const s = Math.max(box.w / mw, box.h / mh) * zoom;
   const dw = mw * s, dh = mh * s;
+  const px = Math.max(-1, Math.min(1, pan?.x || 0));
+  const py = Math.max(-1, Math.min(1, pan?.y || 0));
+  const dx = ((dw - box.w) / 2) * px;
+  const dy = ((dh - box.h) / 2) * py;
   ctx.save();
   if (filterCss && filterCss !== "none" && "filter" in ctx) ctx.filter = filterCss;
-  try { ctx.drawImage(media.el, box.x + (box.w - dw) / 2, box.y + (box.h - dh) / 2, dw, dh); } catch {}
+  try { ctx.drawImage(media.el, box.x + (box.w - dw) / 2 + dx, box.y + (box.h - dh) / 2 + dy, dw, dh); } catch {}
   ctx.restore();
 }
 function vignette(ctx, strength) {
@@ -396,7 +405,7 @@ export function renderFrame(ctx, media, act, template, opts, progress = 1, t = 1
   const HERO = opts.fontHero && opts.fontHero !== "sans" ? COND : SANS; // big numbers use the hero font
   if (!sticker && (!solidBg || backgroundOnly)) {
     ctx.fillStyle = "#0a0a0a"; ctx.fillRect(0, 0, W, H);
-    if (media) drawCover(ctx, media, zoom, filter);
+    if (media) drawCover(ctx, media, zoom, filter, null, { x: opts.panX, y: opts.panY });
     else {
       const bg = BACKGROUNDS.find((b) => b.id === opts.bg) || BACKGROUNDS[0];
       const g = ctx.createLinearGradient(0, 0, W * 0.4, H);

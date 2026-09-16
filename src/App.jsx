@@ -339,7 +339,7 @@ export default function App() {
   }, [media]);
 
   const stateRef = useRef({});
-  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look, backdrop };
+  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look, backdrop, renderOpts };
   const startRef = useRef(performance.now());
   // Restart the animation whenever there is something new to watch — including turning the
   // Animated toggle on. Without opts.animate here the preview plays once, holds, and then
@@ -425,7 +425,7 @@ export default function App() {
       const k = 216 / FORMATS[format].w;
       const cx = c.getContext("2d");
       cx.scale(k, k);
-      try { renderFrame(cx, media, act, template, { ...renderOpts, animate: false }, 1, 1); } catch {}
+      try { renderFrame(cx, media, act, template, { ...stateRef.current.renderOpts, animate: false }, 1, 1); } catch {}
       cx.save(); cx.scale(W / 1000, W / 1000);
       try { renderLayers(cx, doc, { t: Number.POSITIVE_INFINITY, mode: "thumb", fields, asset: assetResolver, hyrox, series, look }); } catch {}
       cx.restore();
@@ -535,7 +535,7 @@ export default function App() {
       ctx.fillStyle = stateRef.current.look?.colors?.bg ?? "#111111";
       ctx.fillRect(0, 0, W, H);
     } else if (lm) {
-      renderFrame(ctx, media, act, template, renderOpts, progress, opts.animate ? animT() : 1, lm);
+      renderFrame(ctx, media, act, template, stateRef.current.renderOpts, progress, opts.animate ? animT() : 1, lm);
     } else {
       ctx.clearRect(0, 0, W, H);
     }
@@ -578,6 +578,14 @@ export default function App() {
   // animKey is in here because the loop stops once the animation settles; pressing Replay
   // resets the clock, and without a dependency on it nothing would start drawing again.
   }, [media, act, template, opts, format, draw, doc, fields, editingTextId, series, look, animKey, fontsReady]);
+
+  // Reframing the photo must repaint at once. The draw loop stops once the animation has
+  // settled, and a change to `opts` alone did not restart it — the canvas kept showing the
+  // pre-pinch framing while the state underneath it was already correct.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: redraw on transform, not on identity
+  useEffect(() => {
+    draw();
+  }, [opts.zoom, opts.panX, opts.panY]);
 
   // ---- Strava (§7.2) ----
   //
@@ -776,7 +784,7 @@ export default function App() {
   const drawFull = (ctx, mode, t = Number.POSITIVE_INFINITY) => {
     const animT2 = t === Number.POSITIVE_INFINITY ? 1 : Math.min(1, t / ANIM_SECONDS);
     const lm = legacyMode(doc, mode);
-    if (lm) renderFrame(ctx, media, effectiveAct, template, renderOpts, 1, animT2, lm);
+    if (lm) renderFrame(ctx, media, effectiveAct, template, stateRef.current.renderOpts, 1, animT2, lm);
     else ctx.clearRect(0, 0, W, H);
     if (doc.layers.length) {
       ctx.save();
@@ -844,9 +852,9 @@ export default function App() {
           if (clip) {
             // Frame-accurate: seek the clip rather than playing it (§9.3).
             try { clip.currentTime = Math.min(clip.duration, t); } catch {}
-            renderFrame(ctx, media, effectiveAct, template, renderOpts, clip.duration ? t / clip.duration : 0, Math.min(1, t / ANIM_SECONDS), "full");
+            renderFrame(ctx, media, effectiveAct, template, stateRef.current.renderOpts, clip.duration ? t / clip.duration : 0, Math.min(1, t / ANIM_SECONDS), "full");
           } else {
-            renderFrame(ctx, media, effectiveAct, template, { ...renderOpts, animate: true }, 1, Math.min(1, t / ANIM_SECONDS), "full");
+            renderFrame(ctx, media, effectiveAct, template, { ...stateRef.current.renderOpts, animate: true }, 1, Math.min(1, t / ANIM_SECONDS), "full");
           }
           if (doc.layers.length) {
             ctx.scale(W / 1000, W / 1000);
@@ -923,6 +931,8 @@ export default function App() {
               fields={fields}
               asset={assetResolver}
               onOpenInspector={() => setTab("designs")}
+              photo={media ? { zoom: opts.zoom ?? 1, panX: opts.panX ?? 0, panY: opts.panY ?? 0 } : null}
+              onPhotoTransform={(next) => setOpts((o) => ({ ...o, ...next }))}
             />
             {!media && (
               <label className="add-media" data-testid="add-media" title="Vertical photos and videos work best">
