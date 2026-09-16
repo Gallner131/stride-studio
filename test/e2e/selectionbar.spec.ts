@@ -31,7 +31,8 @@ test("colour can be changed from the selection, without opening a tab", async ({
   const before = await stageSnapshot(page);
   await page.locator("[data-testid='selbar-color']").click();
   await expect(page.locator("[data-testid='selbar-palette']")).toBeVisible();
-  await page.locator("[data-testid='swatch-FF5A5F']").click();
+  await expect(page.locator("[data-testid='palette-picker']")).toBeVisible();
+  await page.locator("[data-testid='palette-F4564C']").click();
 
   await expect.poll(async () => (await stageSnapshot(page)) !== before, { timeout: 5000 }).toBe(true);
 });
@@ -64,6 +65,6 @@ test("a colour applies to everything selected at once", async ({ page }) => {
 
   const before = await stageSnapshot(page);
   await page.locator("[data-testid='selbar-color']").click();
-  await page.locator("[data-testid='swatch-FF5A5F']").click();
+  await page.locator("[data-testid='palette-F4564C']").click();
   await expect.poll(async () => (await stageSnapshot(page)) !== before, { timeout: 5000 }).toBe(true);
 });

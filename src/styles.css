@@ -376,7 +376,6 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
   padding: 4px; border-radius: 12px;
   background: var(--float-bg); border: 1px solid var(--float-border);
   box-shadow: var(--float-shadow);
-  backdrop-filter: blur(8px);
 }
 .selbar-btn, .selbar-swatch {
   width: 34px; height: 34px; border-radius: 9px; cursor: pointer;
@@ -469,13 +468,14 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
    screen. Below the desktop breakpoint it becomes a sheet across the bottom instead, which
    is both reachable by thumb and impossible to clip. */
 @media (max-width: 899px) {
-  /* `position: fixed` does not escape .selbar — its backdrop-filter makes it the containing
-     block for fixed descendants — so the sheet is centred under the bar and clamped to the
-     viewport width instead. */
+  /* A sheet across the bottom of the screen. It has to be fixed rather than hung off the
+     bar: .stage clips its children, so an absolutely positioned palette had half its chips
+     cut off and unclickable. */
   .selbar-palette {
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(88vw, 320px);
-    max-height: 52vh;
+    position: fixed;
+    inset: auto 8px 10px 8px;
+    width: auto;
+    max-height: 56vh;
+    transform: none;
   }
 }
