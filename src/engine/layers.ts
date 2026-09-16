@@ -24,12 +24,20 @@ import { type ChartData, chartHasData, drawChart } from "./chartLayers";
 import { drawStat, drawStatRow, measureStat, measureStatRow, presentStats, resolveStat } from "./dataLayers";
 import type { LatLng } from "./geometry";
 import { DEFAULT_HYROX_STYLE, drawHyroxBreakdown, drawHyroxSplits, drawHyroxStations } from "./hyroxLayers";
+import type { Backdrop, LegibilityMode } from "./legibility";
+import { legibilityNeed, luminanceUnder, scrimOpacity } from "./legibility";
 import { drawRoute } from "./routeLayer";
 import { stickerPath } from "./stickers";
 import { applyLetterSpacing, clearLetterSpacing, cssFont, measureRun, wrapText } from "./text";
 
 export interface RenderEnv {
   ctx: CanvasRenderingContext2D;
+  /** A coarse luminance map of the photo behind the layers, measured once by the caller. */
+  backdrop?: Backdrop | null;
+  /** How the active look keeps text readable over a photo (§2.7 S4). */
+  legibility?: LegibilityMode;
+  /** Where this layer sits, in fractions of the canvas, for reading the backdrop. */
+  frame?: { x: number; y: number; w: number; h: number };
   fields: FieldTable;
   /** Resolves an image asset id to something drawable. */
   asset: (assetId: string) => CanvasImageSource | null;
@@ -117,6 +125,35 @@ const textRenderer: LayerRenderer<TextLayer> = {
       ctx.fill();
     }
 
+    // Adaptive legibility (§2.7 S4). Only when there is a photo to measure, and only when
+    // the measurement says this text would actually be hard to read — a scrim over a dark
+    // sky dims a photo that needed no help, which is why "always on" was not the answer.
+    const boxW = wrapped.width + pad * 2;
+    const boxH = wrapped.height + pad * 2;
+    const help = legibilityFor(env, style.color, boxW, boxH);
+    if (help) {
+      if (help.mode === "shadow") {
+        ctx.save();
+        ctx.shadowColor = help.darken ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)";
+        ctx.shadowBlur = Math.max(6, style.size * 0.22);
+      } else {
+        ctx.save();
+        ctx.globalAlpha = help.alpha;
+        ctx.fillStyle = help.darken ? "#000000" : "#FFFFFF";
+        const bleed = help.mode === "pill" ? style.size * 0.34 : style.size * 0.18;
+        roundRect(
+          ctx,
+          -bleed,
+          -bleed * 0.6,
+          boxW + bleed * 2,
+          boxH + bleed * 1.2,
+          help.mode === "pill" ? (boxH + bleed * 1.2) / 2 : style.size * 0.12,
+        );
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     ctx.font = cssFont(style);
     applyLetterSpacing(ctx, style);
     ctx.textBaseline = "alphabetic";
@@ -141,8 +178,40 @@ const textRenderer: LayerRenderer<TextLayer> = {
     }
 
     clearLetterSpacing(ctx);
+    if (help?.mode === "shadow") ctx.restore();
   },
 };
+
+/**
+ * What this text needs to survive the photo behind it, or null when it needs nothing.
+ *
+ * Returns the scrim's own opacity rather than a fixed value so a slightly-too-bright sky
+ * gets a whisper and a white-out gets a real backing.
+ */
+function legibilityFor(
+  env: RenderEnv,
+  color: string,
+  boxW: number,
+  boxH: number,
+): { mode: LegibilityMode; darken: boolean; alpha: number } | null {
+  const mode = env.legibility;
+  const frame = env.frame;
+  if (!mode || !env.backdrop || !frame) return null;
+  // The layer's own box, not the frame it was allotted: a centred word is not the width of
+  // the canvas, and measuring the whole width would average in ground it never covers.
+  //
+  // `frame` already carries the allotted box as canvas fractions, so the ratio between the
+  // drawn box and the allotted one converts units to fractions on both axes. Dividing the
+  // height by the canvas WIDTH, as this first did, made every box read as several times its
+  // real height and averaged in most of the photo.
+  const wFrac = frame.w > 0 && boxW > 0 ? Math.min(1, frame.w * (boxW / Math.max(boxW, 1))) : frame.w;
+  const hFrac = frame.h;
+  const lum = luminanceUnder(env.backdrop, frame.x, frame.y, wFrac || frame.w, hFrac);
+  const need = legibilityNeed(color, lum);
+  if (!need.needed || lum === null) return null;
+  if (mode === "shadow") return { mode, darken: need.darken, alpha: 1 };
+  return { mode, darken: need.darken, alpha: scrimOpacity(color, lum, need.darken) };
+}
 
 function drawTextLine(
   ctx: CanvasRenderingContext2D,
@@ -355,6 +424,32 @@ const fixed = (layer: Layer, fw: number, fh: number): Box => ({
   h: typeof layer.h === "number" ? layer.h : fh,
 });
 
+/**
+ * The scrim for a non-text layer whose content is still type — the stats.
+ *
+ * These are the figures on the design, usually the largest thing on it, and over a photo
+ * they were the first thing to disappear. Drawn before the renderer so it paints on top.
+ */
+function drawLegibilityBacking(env: RenderEnv, color: string, box: Box): void {
+  const help = legibilityFor(env, color, box.w, box.h);
+  if (!help || help.mode === "shadow") return;
+  const { ctx } = env;
+  const bleed = Math.max(12, box.h * 0.16);
+  ctx.save();
+  ctx.globalAlpha = help.alpha;
+  ctx.fillStyle = help.darken ? "#000000" : "#FFFFFF";
+  roundRect(
+    ctx,
+    -bleed,
+    -bleed * 0.6,
+    box.w + bleed * 2,
+    box.h + bleed * 1.2,
+    help.mode === "pill" ? (box.h + bleed * 1.2) / 2 : bleed * 0.6,
+  );
+  ctx.fill();
+  ctx.restore();
+}
+
 const statRenderer: LayerRenderer<StatLayer> = {
   measure(layer, env) {
     const stat = resolveStat(layer.field, env.fields, 1);
@@ -367,6 +462,7 @@ const statRenderer: LayerRenderer<StatLayer> = {
   render(layer, env) {
     const progress = layer.countUp ? env.anim.progress : 1;
     const stat = resolveStat(layer.field, env.fields, progress);
+    drawLegibilityBacking(env, layer.style.valueColor, this.measure(layer, env));
     drawStat(env.ctx, stat, layer.style, {
       layout: layer.layout,
       showLabel: layer.showLabel,
@@ -397,6 +493,7 @@ const statRowRenderer: LayerRenderer<StatRowLayer> = {
       countUpProgress: progress,
     };
     const measured = measureStatRow(env.ctx, stats, layer.style, options);
+    drawLegibilityBacking(env, layer.style.color, measured);
     drawStatRow(env.ctx, stats, layer.style, options, measured);
   },
 };

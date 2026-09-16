@@ -25,6 +25,11 @@ export interface DocRenderOptions {
   reducedMotion?: boolean;
   /** Layer currently being edited inline — drawn by the DOM textarea instead. §6.6 */
   hideLayerId?: string | null;
+  /**
+   * A coarse luminance map of the photo behind the design, measured once by the caller when
+   * the photo changes. Absent means no photo, and nothing adapts (§2.7 S4).
+   */
+  backdrop?: RenderEnv["backdrop"];
 }
 
 /**
@@ -42,6 +47,7 @@ export function renderLayers(ctx: CanvasRenderingContext2D, doc: Document, optio
     look = null,
     reducedMotion = false,
     hideLayerId = null,
+    backdrop = null,
   } = options;
   const isThumb = mode === "thumb";
   const time = isThumb ? Number.POSITIVE_INFINITY : t;
@@ -56,8 +62,25 @@ export function renderLayers(ctx: CanvasRenderingContext2D, doc: Document, optio
     const layer = applyLookType(resolveLayer(raw, look), look);
 
     const anim = isThumb || reducedMotion ? STATIC_ANIM : animAt(layer, index, time);
-    const env: RenderEnv = { ctx, fields, asset, anim, hyrox, series };
+    const env: RenderEnv = {
+      ctx,
+      fields,
+      asset,
+      anim,
+      hyrox,
+      series,
+      backdrop,
+      legibility: look?.legibility,
+    };
     const placed = placeLayer(layer, env, doc.format);
+    // Where this layer sits as a fraction of the canvas, so a text layer can read the
+    // backdrop underneath itself rather than the photo as a whole.
+    env.frame = {
+      x: placed.box.x / CANVAS_W,
+      y: placed.box.y / canvasHeight(doc.format),
+      w: placed.box.w / CANVAS_W,
+      h: placed.box.h / canvasHeight(doc.format),
+    };
 
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity * anim.opacity));

@@ -299,8 +299,47 @@ export default function App() {
   }, [measure]);
 
   const canvasRef = useRef(null);
+  // A coarse luminance map of the photo, measured once when it changes (§2.7 S4).
+  //
+  // The engine cannot do this itself: ctx.getImageData forces a GPU readback of several
+  // milliseconds, and doing it per text layer per frame across a six-second animation is
+  // seconds of jank — and the engine takes no DOM anyway (CLAUDE.md rule 6). A photo does
+  // not change while the layers animate, so once is enough.
+  const [backdrop, setBackdrop] = useState(null);
+  useEffect(() => {
+    const el = media?.el;
+    if (!el) {
+      setBackdrop(null);
+      return;
+    }
+    const COLS = 8;
+    const ROWS = 14;
+    try {
+      const small = document.createElement("canvas");
+      small.width = COLS;
+      small.height = ROWS;
+      const sctx = small.getContext("2d", { willReadFrequently: true });
+      if (!sctx) return;
+      // Downscaling to one pixel per cell IS the averaging, and it runs on the GPU.
+      sctx.drawImage(el, 0, 0, COLS, ROWS);
+      const { data } = sctx.getImageData(0, 0, COLS, ROWS);
+      const lum = [];
+      for (let i = 0; i < data.length; i += 4) {
+        const ch = (v) => {
+          const c = v / 255;
+          return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        };
+        lum.push(0.2126 * ch(data[i]) + 0.7152 * ch(data[i + 1]) + 0.0722 * ch(data[i + 2]));
+      }
+      setBackdrop({ cols: COLS, rows: ROWS, lum });
+    } catch {
+      // A tainted canvas (a cross-origin photo) cannot be read. No map, no adaptation.
+      setBackdrop(null);
+    }
+  }, [media]);
+
   const stateRef = useRef({});
-  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look };
+  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look, backdrop };
   const startRef = useRef(performance.now());
   // Restart the animation whenever there is something new to watch — including turning the
   // Animated toggle on. Without opts.animate here the preview plays once, holds, and then
@@ -507,6 +546,7 @@ export default function App() {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
       renderLayers(ctx, st.doc, {
+        backdrop: stateRef.current.backdrop,
         // Once settled, ask for t = Infinity rather than t = 6. Infinity is the settled
         // state every preset agrees on (engine/anim.ts), and it is exactly what export and
         // thumbnails pass — so a held preview is now pixel-identical to what you save.
@@ -741,7 +781,7 @@ export default function App() {
     if (doc.layers.length) {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
-      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox, series, look });
+      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox, series, look, backdrop });
       ctx.restore();
     }
   };
@@ -810,7 +850,7 @@ export default function App() {
           }
           if (doc.layers.length) {
             ctx.scale(W / 1000, W / 1000);
-            renderLayers(ctx, doc, { t, mode: "full", fields, asset: assetResolver, hyrox, series, look });
+            renderLayers(ctx, doc, { t, mode: "full", fields, asset: assetResolver, hyrox, series, look, backdrop });
           }
           ctx.restore();
         },
