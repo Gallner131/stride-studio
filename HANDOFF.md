@@ -130,6 +130,18 @@ A10 is unblocked either way.
 3. **Changing a colour must be trivial.** PR-B15→B17 (the PalettePicker programme) is the
    real answer; Colour being first in the Inspector was only a start.
 
+## Dependencies added outside the spec
+
+CLAUDE.md rule 4 wants a §11.1 row for any new dependency. The spec is not in this repo, so
+it is recorded here instead:
+
+| Service | Used by | Key | Notes |
+|---|---|---|---|
+| Mapbox Static Images | `api/maptiles.ts` | `MAPBOX_TOKEN` (Vercel, production) | Route drawn on a real map as a design background. The token never reaches the browser; the edge function pins style and size so it cannot be used as an open proxy. Free tier is 50k requests/month, and each bounding box is cached immutably at the edge and in IndexedDB. Attribution is required and is drawn onto the design by `App.draw`. |
+
+Without the key the app probes `/api/maptiles`, gets a 503 and hides the Map background
+entirely — the feature is dormant rather than broken.
+
 ## Practical notes
 
 - `npm run dev` builds and serves on `http://127.0.0.1:4173/dist/index.html`.

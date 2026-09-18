@@ -31,6 +31,7 @@ import { BUNDLED_FAMILIES } from "./engine/text.ts";
 import { unregisterServiceWorker } from "./pwa/register.ts";
 import * as Strava from "./data/strava.ts";
 import { parseHeartRateZones, resolveAthleteHrMax, resolveZones, zoneOfBands } from "./data/hr.ts";
+import { fetchRouteMap, MAP_STYLES, mapsAvailable } from "./data/mapTiles.ts";
 import { buildCaption } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
 import { MyDesigns } from "./ui/MyDesigns.tsx";
@@ -561,6 +562,25 @@ export default function App() {
       });
       ctx.restore();
     }
+
+    // Mapbox's terms require its credit to be visible wherever one of its maps is. The image
+    // is fetched without the baked-in version so it can be placed legibly rather than
+    // wherever the tile happened to put it — which means drawing it here, last, so no design
+    // can cover it and every export carries it.
+    const credit = stateRef.current.media?.attribution;
+    if (credit) {
+      ctx.save();
+      ctx.font = `500 ${Math.round(W * 0.019)}px system-ui, sans-serif`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      const pad = Math.round(W * 0.022);
+      const tw = ctx.measureText(credit).width;
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.fillRect(0, H - pad * 2.1, tw + pad * 2, pad * 2.1);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillText(credit, pad, H - pad * 0.7);
+      ctx.restore();
+    }
   }, []);
 
   useEffect(() => {
@@ -701,6 +721,49 @@ export default function App() {
   // advice on the browser where it already works. The message now names the browser's
   // limitation instead of blaming the phone (§1.2 E8 is only half-fixed: a real decoder is
   // still needed for Chrome).
+  // Map backgrounds (§2.12). The map arrives as `media`, so zoom, pan, filters, the dim and
+  // the adaptive legibility all apply to it exactly as they do to a photo — nothing new has
+  // to learn what a map is.
+  const [mapsOn, setMapsOn] = useState(false);
+  const [mapBusy, setMapBusy] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  useEffect(() => {
+    let live = true;
+    mapsAvailable().then((ok) => {
+      if (live) setMapsOn(ok);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const useMapBackground = async (style) => {
+    const route = (effectiveAct.route || []).map(([lat, lon]) => ({ lat, lon }));
+    if (route.length === 0) {
+      setError("This activity has no GPS track, so there is no map to draw.");
+      return;
+    }
+    setMapBusy(true);
+    setError("");
+    try {
+      const map = await fetchRouteMap(route, style, 720, Math.round((720 * H) / W));
+      if (!map) {
+        setError("The map could not be fetched just now.");
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        if (media?.type === "video") media.el.pause();
+        // Mapbox requires its attribution to be visible wherever one of its maps is, and the
+        // image is requested without the baked-in credit so it can be placed legibly here.
+        setMedia({ type: "image", el: img, url: map.url, name: `map-${style}`, attribution: map.attribution });
+      };
+      img.src = map.url;
+    } finally {
+      setMapBusy(false);
+    }
+  };
+
   const onFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -981,6 +1044,11 @@ export default function App() {
           </div>
           <div className="btnrow">
             <label className="btn">{media ? "Change media" : "Choose file"}<input type="file" accept="image/*,video/*" onChange={onFile} data-testid="file-input-2" /></label>
+            {mapsOn && (effectiveAct.route || []).length > 0 && (
+              <button type="button" className="btn" disabled={mapBusy} onClick={() => setShowMapPicker((v) => !v)} data-testid="map-background">
+                {mapBusy ? "Fetching map…" : "Use a map"}
+              </button>
+            )}
             <button type="button" className="btn strava" onClick={() => setShowStrava(true)}>{strava.connected ? "Strava" : "Connect Strava"}</button>
           </div>
           {selection.length > 1 && <AlignBar measure={measure} />}
@@ -1091,6 +1159,27 @@ export default function App() {
         </section>
       </div>
 
+      {showMapPicker && (
+        <Modal onClose={() => setShowMapPicker(false)} title="Map background">
+          <p className="muted small">Your route, drawn on a real map. Pick a style.</p>
+          <div className="chips" data-testid="map-styles">
+            {MAP_STYLES.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className="chip"
+                data-testid={`map-style-${m.id}`}
+                onClick={() => {
+                  setShowMapPicker(false);
+                  useMapBackground(m.id);
+                }}
+              >
+                {m.name}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
       {showSettings && (
         <Settings onClose={() => setShowSettings(false)} onChange={setPrefs} />
       )}
