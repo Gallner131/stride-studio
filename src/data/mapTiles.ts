@@ -33,6 +33,55 @@ export interface MapBox {
   north: number;
 }
 
+/**
+ * Encodes a track as a Google polyline, so Mapbox can draw it.
+ *
+ * The route has to be drawn BY the map, not over it. The image is fitted to a bounding box
+ * and then cover-cropped to the canvas, while the app projects its own route line into a
+ * layer box — two different projections, so the line sat next to the roads it was supposed
+ * to be on rather than along them. Handing the track to Mapbox means one projection and
+ * exact alignment, at any zoom or pan, for free.
+ */
+export function encodePolyline(points: LatLng[]): string {
+  let out = "";
+  let lastLat = 0;
+  let lastLon = 0;
+  const chunk = (v: number) => {
+    let n = v < 0 ? ~(v << 1) : v << 1;
+    while (n >= 0x20) {
+      out += String.fromCharCode((0x20 | (n & 0x1f)) + 63);
+      n >>= 5;
+    }
+    out += String.fromCharCode(n + 63);
+  };
+  for (const p of points) {
+    const lat = Math.round(p.lat * 1e5);
+    const lon = Math.round(p.lon * 1e5);
+    chunk(lat - lastLat);
+    chunk(lon - lastLon);
+    lastLat = lat;
+    lastLon = lon;
+  }
+  return out;
+}
+
+/**
+ * Thins a track to at most `max` points, keeping the first and last.
+ *
+ * A Static Images request goes in a URL, and an hour of GPS at one point a second is tens of
+ * thousands of them — far past any URL limit. Evenly spaced samples keep the shape.
+ */
+export function thinRoute(points: LatLng[], max = 240): LatLng[] {
+  if (points.length <= max) return points;
+  const step = (points.length - 1) / (max - 1);
+  const out: LatLng[] = [];
+  for (let i = 0; i < max; i++) {
+    const p = points[Math.round(i * step)];
+    if (p) out.push(p);
+  }
+  return out;
+}
+
 /** Mapbox requires this to be visible wherever one of its maps is. */
 export const MAP_ATTRIBUTION = "© Mapbox © OpenStreetMap";
 
@@ -81,7 +130,7 @@ export function mapCacheKey(box: MapBox, style: MapStyle, w: number, h: number):
   return `map:${style}:${w}x${h}:${r(box.west)},${r(box.south)},${r(box.east)},${r(box.north)}`;
 }
 
-export function mapRequestUrl(box: MapBox, style: MapStyle, w: number, h: number): string {
+export function mapRequestUrl(box: MapBox, style: MapStyle, w: number, h: number, path?: string): string {
   const q = new URLSearchParams({
     style,
     w: String(box.west),
@@ -92,6 +141,7 @@ export function mapRequestUrl(box: MapBox, style: MapStyle, w: number, h: number
     height: String(h),
     retina: "1",
   });
+  if (path) q.set("path", path);
   return `/api/maptiles?${q.toString()}`;
 }
 
@@ -118,14 +168,15 @@ export async function fetchRouteMap(
   const box = routeBounds(route);
   if (!box) return null;
 
-  const key = mapCacheKey(box, style, width, height);
+  const path = encodePolyline(thinRoute(route));
+  const key = `${mapCacheKey(box, style, width, height)}:${path.length}`;
   const cached = await loadAsset(key);
   if (cached?.blob) {
     return { blob: cached.blob, url: URL.createObjectURL(cached.blob), attribution: MAP_ATTRIBUTION };
   }
 
   try {
-    const res = await fetchImpl(mapRequestUrl(box, style, width, height));
+    const res = await fetchImpl(mapRequestUrl(box, style, width, height, path));
     if (!res.ok) return null;
     const blob = await res.blob();
     if (blob.size === 0) return null;

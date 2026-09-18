@@ -757,11 +757,26 @@ export default function App() {
         // Mapbox requires its attribution to be visible wherever one of its maps is, and the
         // image is requested without the baked-in credit so it can be placed legibly here.
         setMedia({ type: "image", el: img, url: map.url, name: `map-${style}`, attribution: map.attribution });
+        // Mapbox has drawn the route, in the right place. The app's own route inset would be
+        // the same line a second time, somewhere else on the design.
+        setOpts((o) => ({ ...o, showMap: false }));
       };
       img.src = map.url;
     } finally {
       setMapBusy(false);
     }
+  };
+
+  const clearMedia = () => {
+    if (media?.type === "video") media.el.pause();
+    if (media?.url) URL.revokeObjectURL(media.url);
+    const wasMap = Boolean(media?.attribution);
+    setMedia(null);
+    setError("");
+    // Undo what applying a map changed, so removing it really does put things back: the
+    // route inset returns, and the framing resets rather than leaving a photo you add next
+    // mysteriously zoomed into its own corner.
+    setOpts((o) => ({ ...o, ...(wasMap ? { showMap: true } : {}), zoom: 1, panX: 0, panY: 0 }));
   };
 
   const onFile = (e) => {
@@ -1046,7 +1061,12 @@ export default function App() {
             <label className="btn">{media ? "Change media" : "Choose file"}<input type="file" accept="image/*,video/*" onChange={onFile} data-testid="file-input-2" /></label>
             {mapsOn && (effectiveAct.route || []).length > 0 && (
               <button type="button" className="btn" disabled={mapBusy} onClick={() => setShowMapPicker((v) => !v)} data-testid="map-background">
-                {mapBusy ? "Fetching map…" : "Use a map"}
+                {mapBusy ? "Fetching map…" : media?.attribution ? "Change map" : "Use a map"}
+              </button>
+            )}
+            {media && (
+              <button type="button" className="btn" onClick={clearMedia} data-testid="remove-media">
+                {media.attribution ? "Remove map" : "Remove photo"}
               </button>
             )}
             <button type="button" className="btn strava" onClick={() => setShowStrava(true)}>{strava.connected ? "Strava" : "Connect Strava"}</button>

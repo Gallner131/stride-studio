@@ -23,6 +23,12 @@ const STYLES: Record<string, string> = {
 /** Static Images caps a single request at 1280x1280. */
 const MAX_PX = 1280;
 
+/**
+ * A polyline longer than this will not fit in a URL. The client thins to ~240 points, which
+ * encodes to well under it; this is the backstop against a forged request.
+ */
+const MAX_PATH = 6000;
+
 export const config = { runtime: "edge" };
 
 const bad = (status: number, message: string) =>
@@ -57,8 +63,22 @@ export default async function handler(request: Request): Promise<Response> {
   const height = Math.min(MAX_PX, Math.max(64, Math.round(num("height") || 1280)));
   const retina = url.searchParams.get("retina") === "1" ? "@2x" : "";
 
+  // Mapbox draws the route, rather than the app drawing it over the top.
+  //
+  // The image is fitted to a bounding box and then cover-cropped onto the canvas, while the
+  // app projects its own route into a layer box — two different projections, so the line ran
+  // beside the roads instead of along them. One projection fixes it, and it stays fixed at
+  // any zoom or pan because the line is part of the picture.
+  //
+  // Two strokes: a dark casing under a bright line, so the route reads on a pale street map
+  // and on satellite alike.
+  const path = url.searchParams.get("path") ?? "";
+  if (path.length > MAX_PATH) return bad(400, "route too long");
+  const encoded = encodeURIComponent(path);
+  const overlay = path ? `path-9+000000-0.35(${encoded}),path-5+ffffff-1(${encoded})/` : "";
+
   const upstream =
-    `https://api.mapbox.com/styles/v1/${style}/static/` +
+    `https://api.mapbox.com/styles/v1/${style}/static/${overlay}` +
     `[${west},${south},${east},${north}]/${width}x${height}${retina}` +
     `?access_token=${encodeURIComponent(token)}&attribution=false&logo=false`;
 
