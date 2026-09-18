@@ -30,6 +30,14 @@ export interface DocRenderOptions {
    * the photo changes. Absent means no photo, and nothing adapts (§2.7 S4).
    */
   backdrop?: RenderEnv["backdrop"];
+  /**
+   * Places a coordinate on the canvas, when a map is the background.
+   *
+   * A route layer otherwise fits itself to its own box, which knows nothing about where the
+   * map thinks north is, so the trace ran beside the roads rather than along them. Given
+   * this, the trace shares the map's projection and stays a layer you can recolour.
+   */
+  placeRoute?: RenderEnv["placeRoute"];
 }
 
 /**
@@ -48,6 +56,7 @@ export function renderLayers(ctx: CanvasRenderingContext2D, doc: Document, optio
     reducedMotion = false,
     hideLayerId = null,
     backdrop = null,
+    placeRoute,
   } = options;
   const isThumb = mode === "thumb";
   const time = isThumb ? Number.POSITIVE_INFINITY : t;
@@ -71,10 +80,12 @@ export function renderLayers(ctx: CanvasRenderingContext2D, doc: Document, optio
       series,
       backdrop,
       legibility: look?.legibility,
+      placeRoute,
     };
     const placed = placeLayer(layer, env, doc.format);
     // Where this layer sits as a fraction of the canvas, so a text layer can read the
     // backdrop underneath itself rather than the photo as a whole.
+    env.origin = { x: placed.box.x, y: placed.box.y };
     env.frame = {
       x: placed.box.x / CANVAS_W,
       y: placed.box.y / canvasHeight(doc.format),

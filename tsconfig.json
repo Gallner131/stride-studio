@@ -37,6 +37,6 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src/**/*", "test/**/*", "scripts/**/*", "*.mjs", "*.ts"],
+  "include": ["src/**/*", "test/**/*", "scripts/**/*", "api/**/*", "*.mjs", "*.ts"],
   "exclude": ["node_modules", "dist"]
 }

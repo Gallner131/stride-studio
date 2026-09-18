@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { mapCacheKey, mapRequestUrl, routeBounds } from "../../src/data/mapTiles";
+import {
+  fitBoxToAspect,
+  mapCacheKey,
+  mapRequestUrl,
+  mercatorLat,
+  mercatorY,
+  projectToCanvas,
+  routeBounds,
+} from "../../src/data/mapTiles";
 import { FIXTURE_RUN } from "../fixtures/activities.js";
 
 /**
@@ -101,5 +109,81 @@ describe("the request", () => {
     // bundle, and this app ships as one inlined HTML file.
     expect(url.toLowerCase()).not.toContain("token");
     expect(url).not.toContain("mapbox.com");
+  });
+});
+
+describe("sharing the map's projection", () => {
+  // A square box over London, drawn into a square image on a square canvas: the simplest
+  // case where every number can be reasoned about by hand.
+  const box = { west: -0.2, south: 51.4, east: 0.0, north: 51.6 };
+  const base = { box, imgW: 600, imgH: 600, canvasW: 600, canvasH: 600, zoom: 1, panX: 0, panY: 0 };
+
+  it("puts the box's corners at the canvas corners", () => {
+    const p = projectToCanvas({ ...base, box: fitBoxToAspect(box, 1) });
+    const fitted = fitBoxToAspect(box, 1);
+    const [x0, y0] = p(fitted.north, fitted.west);
+    const [x1, y1] = p(fitted.south, fitted.east);
+    expect(x0).toBeCloseTo(0, 4);
+    expect(y0).toBeCloseTo(0, 4);
+    expect(x1).toBeCloseTo(600, 4);
+    expect(y1).toBeCloseTo(600, 4);
+  });
+
+  it("puts the centre of the box in the centre of the canvas", () => {
+    const fitted = fitBoxToAspect(box, 1);
+    const p = projectToCanvas({ ...base, box: fitted });
+    const midLat = mercatorLat((mercatorY(fitted.north) + mercatorY(fitted.south)) / 2);
+    const [x, y] = p(midLat, (fitted.west + fitted.east) / 2);
+    expect(x).toBeCloseTo(300, 3);
+    expect(y).toBeCloseTo(300, 3);
+  });
+
+  it("north is up", () => {
+    const p = projectToCanvas(base);
+    expect(p(51.55, -0.1)[1]).toBeLessThan(p(51.45, -0.1)[1]);
+    expect(p(51.5, -0.15)[0]).toBeLessThan(p(51.5, -0.05)[0]);
+  });
+
+  it("moves the trace exactly as zooming the map moves the ground under it", () => {
+    // The whole point: if these two disagree by any amount the line slides off the roads.
+    //
+    // The fixed point of a centred zoom is the box's MERCATOR centre, which is not the mean
+    // of the two latitudes — 51.5 is a third of a pixel off it here, and at zoom 2 that
+    // shows up as drift. Using the real centre keeps the test about the projection rather
+    // than about my arithmetic.
+    const midLat = mercatorLat((mercatorY(box.north) + mercatorY(box.south)) / 2);
+    const midLon = (box.west + box.east) / 2;
+    const centre = projectToCanvas(base)(midLat, midLon);
+    const zoomed = projectToCanvas({ ...base, zoom: 2 })(midLat, midLon);
+    // A point at the centre of the box stays put under a centred zoom.
+    expect(zoomed[0]).toBeCloseTo(centre[0], 3);
+    expect(zoomed[1]).toBeCloseTo(centre[1], 3);
+    // A point off-centre moves outward by the zoom factor.
+    const offCentre = projectToCanvas(base)(51.55, -0.15);
+    const offZoomed = projectToCanvas({ ...base, zoom: 2 })(51.55, -0.15);
+    expect(offZoomed[0] - centre[0]).toBeCloseTo((offCentre[0] - centre[0]) * 2, 2);
+  });
+
+  it("follows a pan", () => {
+    const still = projectToCanvas({ ...base, zoom: 2 })(51.5, -0.1);
+    const panned = projectToCanvas({ ...base, zoom: 2, panX: 1 })(51.5, -0.1);
+    expect(panned[0]).toBeGreaterThan(still[0]);
+  });
+});
+
+describe("fitBoxToAspect", () => {
+  it("grows the box rather than cropping it", () => {
+    const box = { west: -0.2, south: 51.4, east: 0.0, north: 51.6 };
+    const wide = fitBoxToAspect(box, 2);
+    expect(wide.east - wide.west).toBeGreaterThan(box.east - box.west);
+    // The original box still fits inside, so no part of the route is cut off.
+    expect(wide.west).toBeLessThanOrEqual(box.west);
+    expect(wide.east).toBeGreaterThanOrEqual(box.east);
+  });
+
+  it("produces a box whose Mercator aspect matches what was asked for", () => {
+    const fitted = fitBoxToAspect({ west: -0.2, south: 51.4, east: 0.0, north: 51.6 }, 720 / 1280);
+    const aspect = (fitted.east - fitted.west) / (mercatorY(fitted.north) - mercatorY(fitted.south));
+    expect(aspect).toBeCloseTo(720 / 1280, 6);
   });
 });

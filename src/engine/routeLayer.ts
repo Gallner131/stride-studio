@@ -68,6 +68,15 @@ export interface RouteData {
 export interface RouteRenderOptions {
   /** 0..1 draw-on progress. */
   progress: number;
+  /**
+   * Points already placed, in this layer's own coordinates, instead of fitted to its box.
+   *
+   * Used when a map is the background: the trace has to sit on the roads it was run on, so
+   * it shares the map's projection rather than being scaled to fit a layer box that knows
+   * nothing about where north is. Everything else about the layer — colour, width, mode,
+   * the draw-on — works exactly the same on these points.
+   */
+  placed?: Point[];
 }
 
 /** Mixes two CSS colours. Handles #rgb, #rrggbb and rgba(). */
@@ -151,12 +160,14 @@ export function drawRoute(
   if (data.points.length < 2) return [];
 
   const pad = style.width + (style.mode === "extrude" ? style.width * 1.5 : 0);
-  const projected = projectRoute(data.points, {
-    x: pad,
-    y: pad,
-    w: Math.max(1, w - pad * 2),
-    h: Math.max(1, h - pad * 2),
-  });
+  const projected =
+    options.placed ??
+    projectRoute(data.points, {
+      x: pad,
+      y: pad,
+      w: Math.max(1, w - pad * 2),
+      h: Math.max(1, h - pad * 2),
+    });
 
   const points = style.simplify > 0 ? simplify(projected, style.simplify) : projected;
   if (points.length < 2) return points;

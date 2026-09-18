@@ -31,7 +31,7 @@ import { BUNDLED_FAMILIES } from "./engine/text.ts";
 import { unregisterServiceWorker } from "./pwa/register.ts";
 import * as Strava from "./data/strava.ts";
 import { parseHeartRateZones, resolveAthleteHrMax, resolveZones, zoneOfBands } from "./data/hr.ts";
-import { fetchRouteMap, MAP_STYLES, mapsAvailable } from "./data/mapTiles.ts";
+import { fetchRouteMap, MAP_STYLES, projectToCanvas } from "./data/mapTiles.ts";
 import { buildCaption } from "./export/caption.ts";
 import { layoutFromLocation, layoutToDocument, shareUrl } from "./export/shareLayout.ts";
 import { MyDesigns } from "./ui/MyDesigns.tsx";
@@ -218,6 +218,27 @@ export default function App() {
     root.style.setProperty("--accent-contrast", contrastText(accent));
   }, [look, resolvedTheme]);
 
+  // Places a coordinate on the canvas using the map's own projection, so the trace lands on
+  // the roads it was run on — and keeps doing so as the map is zoomed or panned, because
+  // this mirrors the same cover fit drawCover uses.
+  const [mapBusy, setMapBusy] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [mapGeo, setMapGeo] = useState(null);
+
+  const placeRoute = useMemo(() => {
+    if (!mapGeo || !media?.attribution) return undefined;
+    return projectToCanvas({
+      box: mapGeo.box,
+      imgW: mapGeo.imgW,
+      imgH: mapGeo.imgH,
+      canvasW: W,
+      canvasH: H,
+      zoom: opts.zoom ?? 1,
+      panX: opts.panX ?? 0,
+      panY: opts.panY ?? 0,
+    });
+  }, [mapGeo, media, opts.zoom, opts.panX, opts.panY]);
+
   const renderOpts = useMemo(
     () => ({ ...opts, zones: zones?.bands ?? null, athleteHrMax }),
     [opts, zones, athleteHrMax],
@@ -340,7 +361,7 @@ export default function App() {
   }, [media]);
 
   const stateRef = useRef({});
-  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look, backdrop, renderOpts };
+  stateRef.current = { media, act: effectiveAct, template, opts, format, doc, fields, assetResolver, editingTextId, hyrox, series, look, backdrop, renderOpts, placeRoute };
   const startRef = useRef(performance.now());
   // Restart the animation whenever there is something new to watch — including turning the
   // Animated toggle on. Without opts.animate here the preview plays once, holds, and then
@@ -548,6 +569,7 @@ export default function App() {
       ctx.scale(W / 1000, W / 1000);
       renderLayers(ctx, st.doc, {
         backdrop: stateRef.current.backdrop,
+        placeRoute: stateRef.current.placeRoute,
         // Once settled, ask for t = Infinity rather than t = 6. Infinity is the settled
         // state every preset agrees on (engine/anim.ts), and it is exactly what export and
         // thumbnails pass — so a held preview is now pixel-identical to what you save.
@@ -724,19 +746,6 @@ export default function App() {
   // Map backgrounds (§2.12). The map arrives as `media`, so zoom, pan, filters, the dim and
   // the adaptive legibility all apply to it exactly as they do to a photo — nothing new has
   // to learn what a map is.
-  const [mapsOn, setMapsOn] = useState(false);
-  const [mapBusy, setMapBusy] = useState(false);
-  const [showMapPicker, setShowMapPicker] = useState(false);
-  useEffect(() => {
-    let live = true;
-    mapsAvailable().then((ok) => {
-      if (live) setMapsOn(ok);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
-
   const useMapBackground = async (style) => {
     const route = (effectiveAct.route || []).map(([lat, lon]) => ({ lat, lon }));
     if (route.length === 0) {
@@ -748,7 +757,7 @@ export default function App() {
     try {
       const map = await fetchRouteMap(route, style, 720, Math.round((720 * H) / W));
       if (!map) {
-        setError("The map could not be fetched just now.");
+        setError("Map backgrounds are not available right now.");
         return;
       }
       const img = new Image();
@@ -757,8 +766,9 @@ export default function App() {
         // Mapbox requires its attribution to be visible wherever one of its maps is, and the
         // image is requested without the baked-in credit so it can be placed legibly here.
         setMedia({ type: "image", el: img, url: map.url, name: `map-${style}`, attribution: map.attribution });
-        // Mapbox has drawn the route, in the right place. The app's own route inset would be
-        // the same line a second time, somewhere else on the design.
+        setMapGeo({ box: map.box, imgW: map.width, imgH: map.height });
+        // The legacy templates' small route inset is a decorative thumbnail, not a
+        // geographic one, so over a map it is the same run drawn twice at two scales.
         setOpts((o) => ({ ...o, showMap: false }));
       };
       img.src = map.url;
@@ -772,6 +782,7 @@ export default function App() {
     if (media?.url) URL.revokeObjectURL(media.url);
     const wasMap = Boolean(media?.attribution);
     setMedia(null);
+    setMapGeo(null);
     setError("");
     // Undo what applying a map changed, so removing it really does put things back: the
     // route inset returns, and the framing resets rather than leaving a photo you add next
@@ -867,7 +878,7 @@ export default function App() {
     if (doc.layers.length) {
       ctx.save();
       ctx.scale(W / 1000, W / 1000);
-      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox, series, look, backdrop });
+      renderLayers(ctx, doc, { t, mode, fields, asset: assetResolver, hyrox, series, look, backdrop, placeRoute });
       ctx.restore();
     }
   };
@@ -936,7 +947,7 @@ export default function App() {
           }
           if (doc.layers.length) {
             ctx.scale(W / 1000, W / 1000);
-            renderLayers(ctx, doc, { t, mode: "full", fields, asset: assetResolver, hyrox, series, look, backdrop });
+            renderLayers(ctx, doc, { t, mode: "full", fields, asset: assetResolver, hyrox, series, look, backdrop, placeRoute });
           }
           ctx.restore();
         },
@@ -1059,7 +1070,7 @@ export default function App() {
           </div>
           <div className="btnrow">
             <label className="btn">{media ? "Change media" : "Choose file"}<input type="file" accept="image/*,video/*" onChange={onFile} data-testid="file-input-2" /></label>
-            {mapsOn && (effectiveAct.route || []).length > 0 && (
+            {(effectiveAct.route || []).length > 0 && (
               <button type="button" className="btn" disabled={mapBusy} onClick={() => setShowMapPicker((v) => !v)} data-testid="map-background">
                 {mapBusy ? "Fetching map…" : media?.attribution ? "Change map" : "Use a map"}
               </button>

@@ -38,6 +38,10 @@ export interface RenderEnv {
   legibility?: LegibilityMode;
   /** Where this layer sits, in fractions of the canvas, for reading the backdrop. */
   frame?: { x: number; y: number; w: number; h: number };
+  /** This layer's top-left in canvas units, so a geo-placed route can undo the translation. */
+  origin?: { x: number; y: number };
+  /** Set when a map is the background: turns the route into the map's own coordinates. */
+  placeRoute?: (lat: number, lon: number) => [number, number];
   fields: FieldTable;
   /** Resolves an image asset id to something drawable. */
   asset: (assetId: string) => CanvasImageSource | null;
@@ -523,6 +527,17 @@ const routeRenderer: LayerRenderer<RouteLayer> = {
       drawNoData(env.ctx, w, h, "No GPS in this activity");
       return;
     }
+    // On a map, the trace is placed by the map's projection rather than fitted to this box,
+    // so it lands on the roads. The context is already translated to the layer's top-left,
+    // so the canvas coordinates come back relative to that.
+    const place = env.placeRoute;
+    const placed = place
+      ? route.map(([lat, lon]): [number, number] => {
+          const [x, y] = place(lat, lon);
+          return [x - (env.origin?.x ?? 0), y - (env.origin?.y ?? 0)];
+        })
+      : undefined;
+
     drawRoute(
       env.ctx,
       {
@@ -535,7 +550,7 @@ const routeRenderer: LayerRenderer<RouteLayer> = {
       w,
       h,
       layer.style,
-      { progress: env.anim.progress },
+      { progress: env.anim.progress, placed },
     );
   },
 };
